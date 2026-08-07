@@ -66,7 +66,7 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
     
     // Build delivery address string
     let deliveryAddress = '';
-    if (deliveryInfo.address || deliveryInfo.city || deliveryInfo.pincode) {
+    if (deliveryInfo.address || deliveryInfo.location?.lat) {
       deliveryAddress = `\n\n*📍 Delivery Address:*
 *Name:* ${deliveryInfo.customerName || 'Not provided'}
 *Mobile:* ${deliveryInfo.mobileNumber || 'Not provided'}
@@ -76,16 +76,16 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
         deliveryAddress += `\n*Landmark:* ${deliveryInfo.landmark}`;
       }
       
-      if (deliveryInfo.city) {
-        deliveryAddress += `\n*City:* ${deliveryInfo.city}`;
-      }
-      
-      if (deliveryInfo.pincode) {
-        deliveryAddress += `\n*Pincode:* ${deliveryInfo.pincode}`;
-      }
-      
       if (deliveryInfo.deliveryInstructions) {
         deliveryAddress += `\n*Delivery Instructions:* ${deliveryInfo.deliveryInstructions}`;
+      }
+
+      const loc = deliveryInfo.location;
+      if (loc?.lat && loc?.lng) {
+        deliveryAddress += `\n\n*📍 Live Delivery Location:*
+*Coordinates:* ${Number(loc.lat).toFixed(6)}, ${Number(loc.lng).toFixed(6)}${loc.accuracy ? `\n*GPS Accuracy:* ±${Math.round(loc.accuracy)}m` : ''}
+*Google Maps:* ${loc.mapsUrl || `https://www.google.com/maps?q=${loc.lat},${loc.lng}`}
+*Navigate (for delivery boy):* ${loc.navigateUrl || `https://www.google.com/maps/dir/?api=1&destination=${loc.lat},${loc.lng}`}`;
       }
     }
     
@@ -100,18 +100,18 @@ ${order.transactionId ? `*Transaction ID:* ${order.transactionId}` : ''}
 *Items Ordered:*
 ${orderSummary}${discountText}${deliveryAddress}
 
-*Shop:* ${shopInfo?.name || 'Ajay Sea Foods'}
+*Shop:* ${shopInfo?.name || 'PR Nexus FishMart'}
 *Contact:* ${shopInfo?.phone?.replace(/[^\d+]/g, '') || 'Contact shop for details'}
 
 Thank you for your order! 🐟`;
 
-    const whatsappUrl = `https://wa.me/${shopInfo?.whatsapp || '917666293267'}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${shopInfo?.whatsapp || '919096205136'}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -119,13 +119,13 @@ Thank you for your order! 🐟`;
       }}
     >
       <div 
-        className={`bg-white rounded-2xl w-full max-w-2xl sm:max-w-3xl lg:max-w-4xl transform transition-all duration-300 ${
-          isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+        className={`bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl sm:max-w-3xl lg:max-w-4xl max-h-[94vh] overflow-hidden transform transition-all duration-300 pb-safe ${
+          isAnimating ? 'translate-y-0 sm:scale-100 opacity-100' : 'translate-y-8 sm:translate-y-0 sm:scale-95 opacity-0'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
               <CheckCircle className="w-8 h-8 text-green-600" />
@@ -144,7 +144,7 @@ Thank you for your order! 🐟`;
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[78vh] overflow-y-auto">
           {/* Success Animation */}
           <div className="text-center">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
@@ -259,18 +259,26 @@ Thank you for your order! 🐟`;
                         <span className="text-green-900 text-right">{order.deliveryInfo.landmark}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span className="text-green-700 font-medium">City:</span>
-                      <span className="text-green-900">{order.deliveryInfo.city}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-green-700 font-medium">Pincode:</span>
-                      <span className="text-green-900">{order.deliveryInfo.pincode}</span>
-                    </div>
                     {order.deliveryInfo.deliveryInstructions && (
                       <div className="flex justify-between">
                         <span className="text-green-700 font-medium">Instructions:</span>
                         <span className="text-green-900 text-right">{order.deliveryInfo.deliveryInstructions}</span>
+                      </div>
+                    )}
+                    {order.deliveryInfo.location?.lat && order.deliveryInfo.location?.lng && (
+                      <div className="pt-2 mt-2 border-t border-green-200 space-y-1">
+                        <p className="text-green-700 font-medium">📍 Live Location</p>
+                        <p className="text-xs text-green-900 font-mono">
+                          {Number(order.deliveryInfo.location.lat).toFixed(6)}, {Number(order.deliveryInfo.location.lng).toFixed(6)}
+                        </p>
+                        <a
+                          href={order.deliveryInfo.location.navigateUrl || `https://www.google.com/maps/dir/?api=1&destination=${order.deliveryInfo.location.lat},${order.deliveryInfo.location.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block text-sm text-blue-700 underline"
+                        >
+                          Open navigation path for delivery →
+                        </a>
                       </div>
                     )}
                   </div>
@@ -304,24 +312,24 @@ Thank you for your order! 🐟`;
           {/* WhatsApp Share Button */}
           <button
             onClick={handleWhatsAppShare}
-            className="w-full flex items-center justify-center space-x-2 py-3 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+            className="w-full min-h-[48px] flex items-center justify-center space-x-2 py-3 px-4 bg-green-600 text-white rounded-xl font-semibold active:bg-green-800"
           >
             <MessageCircle className="w-5 h-5" />
             <span>Send to WhatsApp</span>
           </button>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:space-x-3 sm:gap-0">
             <button
               onClick={onContinueShopping}
-              className="flex-1 flex items-center justify-center space-x-2 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              className="flex-1 min-h-[48px] flex items-center justify-center space-x-2 py-3 px-4 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-800"
             >
               <ShoppingBag className="w-4 h-4" />
               <span>Continue Shopping</span>
             </button>
             <button
               onClick={onClose}
-              className="flex-1 flex items-center justify-center space-x-2 py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              className="flex-1 min-h-[48px] flex items-center justify-center space-x-2 py-3 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium active:bg-gray-100"
             >
               <Home className="w-4 h-4" />
               <span>Go Home</span>

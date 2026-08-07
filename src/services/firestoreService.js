@@ -470,7 +470,14 @@ export const loadFishDataFromFirestore = async () => {
       reviews = reviewsSnapshot.docs.map(doc => ({
         id: doc.data().id || parseInt(doc.id) || doc.id,
         ...doc.data()
-      }));
+      })).sort((a, b) => {
+        const dateA = new Date(a.date || a.createdAt || 0).getTime();
+        const dateB = new Date(b.date || b.createdAt || 0).getTime();
+        if (dateB !== dateA) return dateB - dateA;
+        const idA = typeof a.id === 'number' ? a.id : parseInt(a.id, 10) || 0;
+        const idB = typeof b.id === 'number' ? b.id : parseInt(b.id, 10) || 0;
+        return idB - idA;
+      });
       console.log(`📊 Firestore: Found ${reviews.length} reviews`);
     } catch (reviewsError) {
       console.error('❌ Error fetching reviews:', reviewsError);

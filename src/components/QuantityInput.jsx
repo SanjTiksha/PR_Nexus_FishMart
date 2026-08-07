@@ -7,7 +7,7 @@ import {
   calculateLineTotal,
 } from '../utils/quantityUtils';
 
-const DEFAULT_PRESETS = [0.5, 1, 2, 5, 10, 25, 50, 100, 200];
+const DEFAULT_PRESETS = [0.5, 1, 2, 5, 10];
 
 const QuantityInput = ({
   value = QUANTITY_LIMITS.MIN,
@@ -15,13 +15,14 @@ const QuantityInput = ({
   onValidityChange,
   rate,
   label = 'Select Quantity (kg)',
-  helperText = 'Please select weight in 0.5 kg steps (e.g., 0.5, 1.0, 1.5 …).',
+  helperText = 'Tap weight or use +/- (0.5 kg steps)',
   presetOptions = DEFAULT_PRESETS,
   disabled = false,
   variant = 'default',
 }) => {
   const [inputValue, setInputValue] = useState(value.toFixed(1));
   const [error, setError] = useState('');
+  const visiblePresets = (presetOptions || DEFAULT_PRESETS).slice(0, 5);
 
   useEffect(() => {
     const formatted = normalizeQuantity(value).toFixed(1);
@@ -144,16 +145,17 @@ const QuantityInput = ({
 
       <div
         className={`flex items-center justify-center ${
-          isCompact ? 'space-x-3' : 'space-x-4'
-        } border border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm px-3 py-2 min-w-[110px]`}
+          isCompact ? 'space-x-2' : 'space-x-3'
+        } border border-gray-200 rounded-xl bg-white/80 backdrop-blur-sm px-2 py-1.5 sm:px-3 sm:py-2 min-w-[110px]`}
       >
         <button
           type="button"
           onClick={() => adjustQuantity('decrement')}
           disabled={disabled}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-3 sm:p-2 rounded-lg active:bg-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-target flex items-center justify-center"
+          aria-label="Decrease quantity"
         >
-          <Minus className="w-4 h-4" />
+          <Minus className="w-5 h-5 sm:w-4 sm:h-4" />
         </button>
 
         <div
@@ -171,8 +173,7 @@ const QuantityInput = ({
             disabled={disabled}
             onChange={handleInputChange}
             onBlur={() => commitValue(inputValue)}
-            className=" bg-transparent text-blue-400 font-semibold focus:outline-none text-center px-1 py-1"
-            style={{ fontSize: isCompact ? '14px' : '16px' }}
+            className="w-full max-w-[4.5rem] mx-auto bg-transparent text-blue-600 font-semibold focus:outline-none text-center px-1 py-2 text-base"
           />
         </div>
 
@@ -180,9 +181,10 @@ const QuantityInput = ({
           type="button"
           onClick={() => adjustQuantity('increment')}
           disabled={disabled}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-3 sm:p-2 rounded-lg active:bg-gray-200 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-target flex items-center justify-center"
+          aria-label="Increase quantity"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-5 h-5 sm:w-4 sm:h-4" />
         </button>
       </div>
 
@@ -190,15 +192,15 @@ const QuantityInput = ({
 
       {!isCompact && (
         <div className="flex flex-wrap gap-2">
-          {presetOptions.map((preset) => (
+          {visiblePresets.map((preset) => (
             <button
               key={preset}
               type="button"
               onClick={() => handleQuickSelect(preset)}
-              className={`px-3 py-1.5 rounded-full border text-sm transition-colors ${
+              className={`min-h-[40px] px-3.5 py-2 rounded-full border text-sm transition-colors ${
                 normalizeQuantity(inputValue) === normalizeQuantity(preset)
                   ? 'bg-blue-600 text-white border-blue-600'
-                  : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                  : 'border-gray-200 text-gray-600 active:border-blue-300'
               }`}
             >
               {preset} kg

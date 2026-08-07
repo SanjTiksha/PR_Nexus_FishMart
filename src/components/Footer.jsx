@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { COMPANY_EMAILS, mailto } from '../data/companyEmails';
 
 const Footer = ({ shopInfo }) => {
   const currentYear = new Date().getFullYear();
@@ -15,9 +16,9 @@ const Footer = ({ shopInfo }) => {
           {/* Shop Info */}
           <div>
             <h3 className="text-2xl font-bold mb-6 text-white">{shopInfo.name}</h3>
-            <p className="text-gray-300 mb-3 text-lg">Fresh fish delivered daily at wholesale rates.</p>
+            <p className="text-gray-300 mb-3 text-lg">A Venture of PR Nexus Group</p>
+            <p className="text-gray-300 mb-3">Fresh, hygienic seafood delivered daily with trusted quality.</p>
             <div className="space-y-2">
-              <p className="text-gray-300">👤 Owner: {shopInfo.owner}</p>
               <p className="text-gray-300">📍 {shopInfo.address}</p>
               <p className="text-gray-300">📞 {shopInfo.phone}</p>
               <p className="text-gray-300">🕒 {shopInfo.workingHours}</p>
@@ -31,14 +32,14 @@ const Footer = ({ shopInfo }) => {
             <ul className="space-y-3">
               <li>
                 <Link to="/" className="text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2 flex items-center">
-                  <span className="mr-2">🏠</span>
-                  Home
+                  <span className="mr-2">🐟</span>
+                  Buy Fish
                 </Link>
               </li>
               <li>
-                <Link to="/fish" className="text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2 flex items-center">
-                  <span className="mr-2">🐟</span>
-                  Today's Rates
+                <Link to="/home" className="text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2 flex items-center">
+                  <span className="mr-2">🏠</span>
+                  Home
                 </Link>
               </li>
               <li>
@@ -70,13 +71,26 @@ const Footer = ({ shopInfo }) => {
                 <span>WhatsApp Now</span>
                 <span className="ml-auto group-hover:translate-x-1 transition-transform duration-300">→</span>
               </a>
-              <a 
-                href={`mailto:${shopInfo.email}`}
+              <a
+                href={mailto(COMPANY_EMAILS.info, 'Enquiry - PR Nexus FishMart')}
                 className="group flex items-center text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2"
               >
                 <span className="mr-3 text-xl">📧</span>
-                <span>Email Us</span>
-                <span className="ml-auto group-hover:translate-x-1 transition-transform duration-300">→</span>
+                <span>Info · {COMPANY_EMAILS.info}</span>
+              </a>
+              <a
+                href={mailto(COMPANY_EMAILS.sales, 'Sales Enquiry - PR Nexus FishMart')}
+                className="group flex items-center text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2"
+              >
+                <span className="mr-3 text-xl">🛒</span>
+                <span>Sales · {COMPANY_EMAILS.sales}</span>
+              </a>
+              <a
+                href={mailto(COMPANY_EMAILS.support, 'Support - PR Nexus FishMart')}
+                className="group flex items-center text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2"
+              >
+                <span className="mr-3 text-xl">🛟</span>
+                <span>Support · {COMPANY_EMAILS.support}</span>
               </a>
             </div>
             

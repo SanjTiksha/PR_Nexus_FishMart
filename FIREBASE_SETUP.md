@@ -125,7 +125,7 @@ Single document `app` containing:
 ```javascript
 {
   shopInfo: {
-    name: "Ajay Sea Foods",
+    name: "PR Nexus FishMart",
     owner: "...",
     phone: "...",
     // ... other shop info

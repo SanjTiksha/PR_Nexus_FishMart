@@ -208,5 +208,5 @@ After fixing issues, verify:
 ---
 
 **Last Updated:** 2024
-**Project:** Ajay Sea Foods - Fish Website
+**Project:** PR Nexus FishMart - Fish Website
 

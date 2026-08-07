@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Star, ThumbsUp, MessageCircle, Trash2 } from 'lucide-react';
 
 const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
@@ -6,8 +6,22 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
   const [newReview, setNewReview] = useState({ name: '', rating: 5, comment: '' });
   const [showReviewForm, setShowReviewForm] = useState(false);
 
-  const averageRating = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
-  const totalReviews = reviews.length;
+  // Newest reviews first (by date, then by id)
+  const sortedReviews = useMemo(() => {
+    return [...reviews].sort((a, b) => {
+      const dateA = new Date(a.date || a.createdAt || 0).getTime();
+      const dateB = new Date(b.date || b.createdAt || 0).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      const idA = typeof a.id === 'number' ? a.id : parseInt(a.id, 10) || 0;
+      const idB = typeof b.id === 'number' ? b.id : parseInt(b.id, 10) || 0;
+      return idB - idA;
+    });
+  }, [reviews]);
+
+  const averageRating = sortedReviews.length
+    ? sortedReviews.reduce((sum, review) => sum + review.rating, 0) / sortedReviews.length
+    : 0;
+  const totalReviews = sortedReviews.length;
 
   const handleSubmitReview = (e) => {
     e.preventDefault();
@@ -85,7 +99,7 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
 
           <div className="space-y-2">
             {[5, 4, 3, 2, 1].map((rating) => {
-              const count = reviews.filter(r => r.rating === rating).length;
+              const count = sortedReviews.filter(r => r.rating === rating).length;
               const percentage = (count / totalReviews) * 100;
               return (
                 <div key={rating} className="flex items-center space-x-2">
@@ -170,7 +184,7 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
 
       {/* Reviews List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {reviews.slice(0, 3).map((review) => (
+        {sortedReviews.slice(0, isAdmin ? sortedReviews.length : 3).map((review) => (
           <div key={review.id} className="review-card bg-white rounded-2xl shadow-md p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-300 border border-gray-200">
             <div>
               <div className="flex items-center justify-between mb-3">

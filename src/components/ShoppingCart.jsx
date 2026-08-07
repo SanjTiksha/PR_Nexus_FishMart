@@ -57,7 +57,7 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -65,7 +65,7 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
       }}
     >
       <div 
-        className={`bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-[33.6rem] max-h-[90vh] flex flex-col transform transition-all duration-300 ${
+        className={`bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-[33.6rem] max-h-[94vh] flex flex-col transform transition-all duration-300 pb-safe ${
           isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -109,23 +109,26 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.id} className="flex items-center space-x-4 p-3 bg-gray-50 rounded-lg">
+              <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
                 <img
                   src={getFishImageUrl(item.image)}
                   alt={item.name}
-                  className="w-16 h-16 object-cover rounded-lg"
+                  className="w-14 h-14 sm:w-16 sm:h-16 object-cover rounded-lg flex-shrink-0"
                   onError={handleImageError}
                 />
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">{item.name}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-gray-900 truncate">{item.name}</h3>
                   <p className="text-sm text-gray-600">
-                    {item.weight ? 
-                      `₹${item.price || item.rate}/${item.unit || 'kg'} × ${item.weight}kg` : 
-                      `₹${item.price || item.rate}/${item.unit || 'kg'}`
-                    }
+                    ₹{item.price || item.rate}/{item.unit || 'kg'}
+                  </p>
+                  <p className="font-semibold text-blue-600 sm:hidden">
+                    ₹{calculateLineTotal(item.price || item.rate, item.quantity).toFixed(2)}
                   </p>
                 </div>
-                <div className="w-[120px] sm:w-[140px]">
+                </div>
+                <div className="flex items-center justify-between gap-3 sm:contents">
+                <div className="w-[140px] sm:w-[140px]">
                   <QuantityInput
                     value={item.quantity}
                     onChange={(updatedQuantity) => onUpdateCart(item.id, updatedQuantity)}
@@ -136,7 +139,7 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
                     variant="compact"
                   />
                 </div>
-                <div className="text-right">
+                <div className="text-right hidden sm:block">
                   <p className="font-medium text-blue-600">
                     ₹{calculateLineTotal(item.price || item.rate, item.quantity).toFixed(2)}
                   </p>
@@ -146,6 +149,13 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
                   >
                     Remove
                   </button>
+                </div>
+                <button
+                  onClick={() => onRemoveItem(item.id)}
+                  className="sm:hidden text-red-500 text-sm font-medium px-2 py-2"
+                >
+                  Remove
+                </button>
                 </div>
               </div>
             ))
@@ -194,10 +204,10 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
                 </p>
               )}
 
-              <div className="flex space-x-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:space-x-3 sm:gap-0">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 px-4 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  className="flex-1 min-h-[48px] py-3 px-4 border border-gray-300 rounded-xl font-medium active:bg-gray-100"
                 >
                   Continue Shopping
                 </button>
@@ -208,7 +218,7 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
                     }
                   }}
                   disabled={hasInvalidQuantities}
-                  className="flex-1 py-3 px-4 bg-red-500 text-white rounded-lg font-medium hover:bg-opacity-90 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 disabled:bg-red-300 disabled:cursor-not-allowed"
+                  className="flex-1 min-h-[48px] py-3 px-4 bg-red-500 text-white rounded-xl font-semibold active:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed"
                 >
                   Checkout
                 </button>

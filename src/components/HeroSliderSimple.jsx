@@ -57,7 +57,7 @@ const HeroSliderSimple = () => {
     },
     {
       src: "/images/banner_11.png",
-      caption: "Ajay Sea Foods",
+      caption: "PR Nexus FishMart",
       description: "Your Trusted Seafood Partner"
     }
   ];
@@ -150,7 +150,7 @@ const HeroSliderSimple = () => {
             </a>
             
             <a
-              href="https://wa.me/917666293267"
+              href="https://wa.me/919096205136"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex items-center space-x-2 px-5 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-semibold text-sm sm:text-base shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"

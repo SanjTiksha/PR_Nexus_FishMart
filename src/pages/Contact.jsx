@@ -1,7 +1,10 @@
+import { COMPANY_EMAILS, EMAIL_DEPARTMENTS, PRIMARY_EMAIL, mailto } from '../data/companyEmails';
 
-const MAP_SHARE_URL = 'https://maps.app.goo.gl/uq25p5EM74ANHTaFA';
+const MAP_SHARE_URL =
+  'https://www.google.com/maps/search/?api=1&query=18.5082296,73.848883';
 const MAP_EMBED_URL =
-  'https://www.google.com/maps?q=18.5725928,73.8344218&hl=en&z=17&output=embed';
+  'https://www.google.com/maps?q=18.5082296,73.848883&hl=en&z=17&output=embed';
+// Office: PR Nexus Group Office, Utkarsh Apt, Near Tilak Smarak Mandir Chowk, Sadashiv Peth, Pune 411030
 
 const Contact = ({ shopInfo }) => {
   const handleWhatsApp = () => {
@@ -10,7 +13,7 @@ const Contact = ({ shopInfo }) => {
   };
 
   const handleEmail = () => {
-    window.open(`mailto:${shopInfo.email}`);
+    window.open(mailto(PRIMARY_EMAIL, 'Enquiry - PR Nexus FishMart'));
   };
 
   const handleDirections = () => {
@@ -64,7 +67,8 @@ const Contact = ({ shopInfo }) => {
                 <span className="text-2xl">📧</span>
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">Email</h3>
-              <p className="text-gray-600 mb-4">Send us your requirements</p>
+              <p className="text-gray-600 mb-1">General: {COMPANY_EMAILS.info}</p>
+              <p className="text-gray-500 text-sm mb-4">Sales: {COMPANY_EMAILS.sales}</p>
               <button
                 onClick={handleEmail}
                 className="btn-primary w-full"
@@ -109,10 +113,11 @@ const Contact = ({ shopInfo }) => {
                 </div>
 
                 <div className="flex items-start">
-                  <span className="text-2xl mr-4 mt-1">👨‍💼</span>
+                  <span className="text-2xl mr-4 mt-1">🏢</span>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">Owner</h3>
-                    <p className="text-gray-600">{shopInfo.owner}</p>
+                    <h3 className="text-lg font-bold text-gray-900">Group</h3>
+                    <p className="text-gray-600">PR Nexus Group</p>
+                    <p className="text-sm text-gray-500 mt-1">A Venture of PR Nexus Group</p>
                   </div>
                 </div>
 
@@ -140,12 +145,12 @@ const Contact = ({ shopInfo }) => {
                 <div className="flex items-start">
                   <span className="text-2xl mr-4 mt-1">📧</span>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900">Email</h3>
-                    <a 
-                      href={`mailto:${shopInfo.email}`}
+                    <h3 className="text-lg font-bold text-gray-900">Primary Email</h3>
+                    <a
+                      href={mailto(PRIMARY_EMAIL)}
                       className="text-blue-600 hover:underline"
                     >
-                      {shopInfo.email}
+                      {PRIMARY_EMAIL}
                     </a>
                   </div>
                 </div>
@@ -165,7 +170,7 @@ const Contact = ({ shopInfo }) => {
               <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-1">🗺️ Find Us on the Map</h2>
-                  <p className="text-gray-600">Visit Ajay Sea Foods – Fresh Every Morning!</p>
+                  <p className="text-gray-600">Visit PR Nexus FishMart – Fresh Every Morning!</p>
                 </div>
                 <button
                   onClick={handleDirections}
@@ -176,7 +181,7 @@ const Contact = ({ shopInfo }) => {
               </div>
               <div className="relative overflow-hidden rounded-3xl shadow-2xl">
                 <iframe
-                  title="Ajay Sea Foods Location"
+                  title="PR Nexus FishMart Location"
                   src={MAP_EMBED_URL}
                   loading="lazy"
                   allowFullScreen
@@ -189,8 +194,35 @@ const Contact = ({ shopInfo }) => {
         </div>
       </section>
 
-      {/* Quick Actions */}
+      {/* Department Emails */}
       <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Email the Right Team</h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Reach PR Nexus Group faster — choose the department that matches your enquiry.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-4">
+            {EMAIL_DEPARTMENTS.map((dept) => (
+              <a
+                key={dept.key}
+                href={mailto(dept.email, `${dept.label} - PR Nexus FishMart`)}
+                className="card p-6 hover:scale-[1.02] transition-transform block"
+              >
+                <div className="text-3xl mb-3">{dept.icon}</div>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">{dept.label}</h3>
+                <p className="text-sm text-gray-600 mb-3">{dept.description}</p>
+                <p className="text-blue-600 font-medium break-all">{dept.email}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Quick Actions */}
+      <section className="py-16 bg-cyan-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Quick Actions</h2>

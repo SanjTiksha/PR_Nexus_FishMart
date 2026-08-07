@@ -1124,7 +1124,7 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
                       name="whatsapp"
                       defaultValue={fishData.shopInfo.whatsapp || fishData.shopInfo.phone}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                      placeholder="e.g., 917666293267"
+                      placeholder="e.g., 919096205136"
                     />
                   </div>
                 </div>

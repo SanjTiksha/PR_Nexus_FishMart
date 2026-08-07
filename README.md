@@ -1,84 +1,64 @@
-# 🐟 Rajesh Fish Market Website
+# 🐟 PR Nexus FishMart
 
-A modern, responsive website for a fish wholesale & retail business built with React, Vite, and Tailwind CSS.
+A modern, mobile-first seafood marketplace for **PR Nexus FishMart** (a venture of PR Nexus Group), built with React, Vite, Tailwind CSS, and Firebase Firestore.
+
+**Live repo:** https://github.com/SanjTiksha/PR_Nexus_FishMart
 
 ## 🎯 Features
 
 ### 🏠 **Home Page**
-- Hero banner with compelling tagline
+- Brand-first introduction for PR Nexus Group
 - Featured fish showcase
 - Quick contact buttons (Call, WhatsApp)
-- Promotional sections
+- Business highlights
 
-### 🐠 **Fish Catalog**
-- Dynamic fish list with rates
-- Search and filter functionality
-- QR code payment integration
-- Print/Download rate sheets
-- Stock status indicators
+### 🐠 **Fish Catalog** (default landing `/`)
+- Live rates from Firestore
+- Search and filter
+- Thumb-friendly mobile cards (Add to Cart / Buy Now)
+- Delivery map pin at checkout
+- UPI QR payment + WhatsApp order share
 
-### 👤 **About Us**
-- Shop introduction
-- Owner profile
-- Contact information
-- Location details
+### 👤 **About & Contact**
+- Group office details (Pune)
+- Maps, emails, phone / WhatsApp
 
-### 🔑 **Admin Panel**
-- Secure login system
-- CRUD operations for fish management
-- Shop settings management
-- Promotions control
-- Data backup/restore functionality
+### 🔑 **Admin Panel** (`/admin`)
+- Fish rates & stock
+- Shop settings
+- Promotions
+- Backup / restore
 
-### 💳 **QR Payment System**
-- Static QR code display
-- UPI ID integration
-- Deep link support for UPI apps
-- Copy UPI ID functionality
-
-### 📱 **Responsive Design**
-- Mobile-first approach
-- Tablet and desktop optimized
-- Touch-friendly interface
-- Fast loading times
+### 📱 **Mobile-first**
+- Safe-area support, large touch targets
+- Bottom-sheet cart / checkout / payment flows
+- Optimized for phone users (~90% of traffic)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- npm or yarn
+- Node.js 18+ (20 recommended)
+- npm
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd fish-webside-17-10-2024
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-4. **Open in browser**
-   Navigate to `http://localhost:5173`
-
-## 📂 Project Structure
-
+```bash
+git clone https://github.com/SanjTiksha/PR_Nexus_FishMart.git
+cd PR_Nexus_FishMart
+npm install
+npm run dev
 ```
-src/
-├── components/          # Reusable UI components
-│   ├── Header.jsx      # Navigation header
-│   ├── Footer.jsx       # Site footer
-│   ├── FishCard.jsx    # Individual fish display
-│   ├── QRModal.jsx     # Payment modal
-│   ├── PromoBanner.jsx # Promotional banner
+
+Open `http://localhost:5173` (or the port Vite prints).
+
+### Production build
+
+```bash
+npm run build
+npm run preview
+```
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for Netlify, Vercel, and GitHub Pages.│   ├── PromoBanner.jsx # Promotional banner
 │   ├── AdminLogin.jsx  # Admin authentication
 │   ├── AdminPanel.jsx  # Admin dashboard
 │   └── FeedbackButton.jsx # Feedback widget
@@ -190,5 +170,5 @@ This project is proprietary software developed for Rajesh Fish Market.
 
 ---
 
-**Designed by Ajay Sea Foods** 🎨
+**Designed by PR Nexus FishMart** 🎨
 

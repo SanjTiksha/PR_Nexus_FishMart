@@ -188,7 +188,7 @@ const QRModal = ({
                     />
                   </div>
                   <div className="mt-4 text-center">
-                    <p className="text-xs text-gray-500">Union Bank • BHIM UPI</p>
+                    <p className="text-xs text-gray-500">ICICI Bank • UPI</p>
                     <p className="text-xs text-gray-400 mt-1">Amount: ₹{amount}</p>
                   </div>
                 </div>

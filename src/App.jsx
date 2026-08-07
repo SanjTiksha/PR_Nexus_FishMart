@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -537,7 +537,7 @@ function App() {
   }
 
   return (
-    <Router>
+    <Router basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-cyan-50'}`}>
         <ScrollToTop enabled={!isVoiceSearchActive} />
         {/* Promotion Popup (Professional) */}
@@ -556,9 +556,7 @@ function App() {
         
         <main>
           <Routes>
-            <Route path="/" element={<Home fishData={fishData} addToCart={addToCart} refreshFishData={refreshFishData} />} />
-            <Route path="/about" element={<About shopInfo={fishData.shopInfo} />} />
-            <Route path="/fish" element={
+            <Route path="/" element={
               <FishCatalog 
                 fishData={fishData} 
                 addToCart={addToCart}
@@ -569,6 +567,9 @@ function App() {
                 voiceSearchQuery={voiceSearchQuery}
               />
             } />
+            <Route path="/fish" element={<Navigate to="/" replace />} />
+            <Route path="/home" element={<Home fishData={fishData} addToCart={addToCart} refreshFishData={refreshFishData} />} />
+            <Route path="/about" element={<About shopInfo={fishData.shopInfo} />} />
             <Route path="/contact" element={<Contact shopInfo={fishData.shopInfo} />} />
             <Route path="/admin" element={<Admin fishData={fishData} refreshFishData={refreshFishData} />} />
           </Routes>

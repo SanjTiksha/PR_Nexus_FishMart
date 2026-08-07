@@ -4,6 +4,52 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile-first base improvements */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Prevent iOS zoom on focus — inputs must be ≥16px */
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+  }
+
+  @media (min-width: 768px) {
+    input,
+    select,
+    textarea,
+    button {
+      font-size: inherit;
+    }
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  }
+
+  .pb-mobile-nav {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 /* Enhanced Hero Slider Animations */
 @keyframes fade-in-up {
   from {

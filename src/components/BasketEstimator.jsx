@@ -296,7 +296,7 @@ ${basket.map(item => `${item.name} - ${item.weight}kg × ${item.quantity} = ₹$
 Total: ₹${finalTotal.toFixed(2)}
 Please confirm availability and delivery.`;
                 
-                const whatsappUrl = `https://wa.me/917666293267?text=${encodeURIComponent(message)}`;
+                const whatsappUrl = `https://wa.me/919096205136?text=${encodeURIComponent(message)}`;
                 window.open(whatsappUrl, '_blank');
               }}
               className="flex-1 bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-bold transition-colors"

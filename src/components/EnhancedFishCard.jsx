@@ -89,10 +89,10 @@ const EnhancedFishCard = ({
 
   return (
     <>
-      <div className="relative bg-white rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden border border-gray-100">
+      <div className="relative bg-white rounded-2xl sm:rounded-3xl shadow-md hover:shadow-xl transition-all duration-300 sm:transform sm:hover:-translate-y-2 overflow-hidden border border-gray-100">
         <div className="relative">
-          {/* Image with loading state */}
-          <div className="relative h-72 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
+          {/* Image with loading state — shorter on mobile for faster browse */}
+          <div className="relative h-44 sm:h-56 md:h-72 bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
             {!imageLoaded && (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -101,7 +101,7 @@ const EnhancedFishCard = ({
             <img
               src={getFishImageUrl(fish.image)}
               alt={fish.name}
-              className={`w-full h-full object-cover rounded-t-3xl transition-all duration-500 group-hover:scale-110 ${
+              className={`w-full h-full object-cover rounded-t-2xl sm:rounded-t-3xl transition-all duration-500 ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}
               onLoad={() => setImageLoaded(true)}
@@ -111,8 +111,8 @@ const EnhancedFishCard = ({
               }}
             />
             
-            {/* Overlay on hover */}
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center">
+            {/* Desktop hover overlay */}
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300 items-center justify-center hidden sm:flex">
               <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex space-x-3">
                 <button
                   onClick={() => setShowQuickView(true)}
@@ -132,64 +132,65 @@ const EnhancedFishCard = ({
               </div>
             </div>
 
-            {/* Share Button - moved to top-left */}
+            {/* Share Button */}
             <button
               onClick={handleShare}
-              className="absolute top-3 left-3 bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-sm hover:bg-white transition-all duration-300 transform hover:scale-110"
+              className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-white/90 backdrop-blur-sm p-2.5 sm:p-2 rounded-full shadow-sm touch-target flex items-center justify-center"
+              aria-label="Share"
             >
               <Share2 className="w-4 h-4 text-gray-700" />
             </button>
 
-            {/* Favorite Button - moved to top-right */}
+            {/* Favorite Button */}
             <button
               onClick={handleToggleFavorite}
-              className="absolute top-3 right-3 bg-white p-2 rounded-full shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-110"
+              className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-white p-2.5 sm:p-2 rounded-full shadow-sm touch-target flex items-center justify-center"
+              aria-label="Favorite"
             >
               <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current text-red-500' : 'text-gray-600'}`} />
             </button>
 
-            {/* Stock Badge - bottom-right, larger premium size to cover watermark */}
-            <div className={`absolute bottom-3 right-3 text-base font-bold px-4 py-2 rounded-xl shadow-md border transition-all duration-300 ${
+            {/* Stock Badge */}
+            <div className={`absolute bottom-2 right-2 sm:bottom-3 sm:right-3 text-xs sm:text-base font-bold px-2.5 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl shadow-md border ${
               fish.inStock 
-                ? 'bg-white/70 backdrop-blur-sm text-green-800 border-green-300' 
-                : 'bg-white/70 backdrop-blur-sm text-red-800 border-red-300'
+                ? 'bg-white/80 backdrop-blur-sm text-green-800 border-green-300' 
+                : 'bg-white/80 backdrop-blur-sm text-red-800 border-red-300'
             }`}>
               {fish.inStock ? '✅ In Stock' : '❌ Out of Stock'}
             </div>
           </div>
         </div>
 
-        <div className="p-5 space-y-3">
+        <div className="p-3.5 sm:p-5 space-y-2.5 sm:space-y-3">
           {/* Fish Info */}
           <div>
-            <h3 className="text-lg font-bold text-gray-900">
+            <h3 className="text-base sm:text-lg font-bold text-gray-900 leading-snug">
               {fish.name}
             </h3>
-            <p className="text-sm text-gray-500">{fish.category} Fish</p>
+            <p className="text-xs sm:text-sm text-gray-500">{fish.category} Fish</p>
             
-            {/* Rating */}
-            <div className="flex items-center mt-2">
+            <div className="flex items-center mt-1.5 sm:mt-2">
               <div className="flex text-yellow-400">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-current" />
+                  <Star key={i} className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
                 ))}
               </div>
-              <span className="text-sm text-gray-600 ml-2 font-medium">(4.8)</span>
+              <span className="text-xs sm:text-sm text-gray-600 ml-2 font-medium">(4.8)</span>
             </div>
           </div>
 
-          {/* Price and Cart Info */}
+          {/* Price */}
           <div className="flex items-center justify-between">
-            <span className="text-2xl font-bold text-blue-600">₹{formatPrice(priceInfo.currentPrice)}</span>
+            <span className="text-xl sm:text-2xl font-bold text-blue-600">₹{formatPrice(priceInfo.currentPrice)}<span className="text-sm font-medium text-gray-500">/kg</span></span>
             {priceInfo.isDiscounted && (
-              <span className="text-sm bg-red-100 text-red-600 px-2 py-1 rounded-lg font-semibold">
+              <span className="text-xs sm:text-sm bg-red-100 text-red-600 px-2 py-1 rounded-lg font-semibold">
                 {priceInfo.discountPercentage}% OFF
               </span>
             )}
           </div>
 
           {/* Quantity Controls */}
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             <QuantityInput
               value={quantity}
               onChange={setQuantity}
@@ -198,14 +199,14 @@ const EnhancedFishCard = ({
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between mt-3">
+          {/* Action Buttons — large thumb-friendly targets */}
+          <div className="flex items-stretch gap-2 mt-2 sm:mt-3">
             <button
               onClick={handleAddToCart}
               disabled={!fish.inStock || !isQuantityValid}
-              className={`w-1/2 py-2 rounded-xl font-semibold transition-all duration-300 mr-2 ${
+              className={`flex-1 min-h-[48px] py-3 rounded-xl text-sm sm:text-base font-semibold transition-all duration-300 ${
                 fish.inStock
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed'
+                  ? 'bg-blue-600 text-white active:bg-blue-800 disabled:bg-blue-300 disabled:cursor-not-allowed'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
@@ -214,9 +215,9 @@ const EnhancedFishCard = ({
             <button
               onClick={handleBuyNowClick}
               disabled={!fish.inStock || !isQuantityValid}
-              className={`w-1/2 py-2 rounded-xl font-semibold transition-all duration-300 ${
+              className={`flex-1 min-h-[48px] py-3 rounded-xl text-sm sm:text-base font-semibold transition-all duration-300 ${
                 fish.inStock
-                  ? 'bg-orange-500 text-white hover:bg-orange-600 disabled:bg-orange-300 disabled:cursor-not-allowed'
+                  ? 'bg-orange-500 text-white active:bg-orange-700 disabled:bg-orange-300 disabled:cursor-not-allowed'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
               }`}
             >
@@ -224,20 +225,18 @@ const EnhancedFishCard = ({
             </button>
           </div>
 
-          {/* Description */}
           {fish.description && (
-            <p className="text-sm text-gray-600 leading-relaxed line-clamp-2">{fish.description}</p>
+            <p className="hidden sm:block text-sm text-gray-600 leading-relaxed line-clamp-2">{fish.description}</p>
           )}
 
-          {/* Additional Info */}
-          <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-gray-500 pt-2 border-t border-gray-100">
             <div className="flex items-center space-x-1">
               <span className="text-green-500">🌊</span>
               <span className="font-medium">Fresh Daily</span>
             </div>
             <div className="flex items-center space-x-1">
               <span className="text-blue-500">🚚</span>
-              <span className="font-medium">Free Delivery</span>
+              <span className="font-medium">Fast Delivery</span>
             </div>
           </div>
         </div>

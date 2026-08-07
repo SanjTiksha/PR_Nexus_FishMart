@@ -1,7 +1,7 @@
 {
-  "name": "Rajesh Fish Market - Fresh Fish Every Morning",
-  "short_name": "Fish Market",
-  "description": "Premium quality fish at wholesale prices. Fresh catch daily from Rajesh Fish Market.",
+  "name": "PR Nexus FishMart - Fresh Fish Every Morning",
+  "short_name": "PR Nexus FishMart",
+  "description": "Premium quality fish at wholesale prices. Fresh catch daily from PR Nexus FishMart.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#e0fbfc",

@@ -6,7 +6,7 @@ const SocialShare = ({ url, title, description, image }) => {
   const [copied, setCopied] = useState(false);
 
   const shareData = {
-    title: title || 'Rajesh Fish Market - Fresh Fish Every Morning',
+    title: title || 'PR Nexus FishMart - Fresh Fish Every Morning',
     text: description || 'Check out the freshest fish at the best prices!',
     url: url || window.location.href
   };

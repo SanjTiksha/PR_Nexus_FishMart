@@ -89,7 +89,7 @@ const SideMenu = ({ onNavigate, onLogout, isOpen: externalOpen, onClose, adminIn
                   {(adminInfo.name || 'Admin').charAt(0).toUpperCase()}
                 </span>
               </div>
-              <h3 className="font-semibold text-xl text-white">{adminInfo.name || 'Ajay Sea Foods Admin'}</h3>
+              <h3 className="font-semibold text-xl text-white">{adminInfo.name || 'PR Nexus FishMart Admin'}</h3>
               {adminInfo.email && <p className="text-sm text-white/80">{adminInfo.email}</p>}
             </div>
 

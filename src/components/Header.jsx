@@ -6,30 +6,34 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/', label: 'Home' },
+    { path: '/', label: 'Fish' },
+    { path: '/home', label: 'Home' },
     { path: '/about', label: 'About' },
-    { path: '/fish', label: 'Fish' },
     { path: '/contact', label: 'Contact' }
   ];
+
+  const isActivePath = (path) => {
+    if (path === '/') return location.pathname === '/' || location.pathname === '/fish';
+    return location.pathname === path;
+  };
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/90 shadow-lg border-b border-gray-200/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-4">
+        <div className="flex justify-between items-center py-2.5 sm:py-4">
           {/* Enhanced Logo */}
-          <Link to="/" className="flex items-center space-x-4 group">
-            <div className="relative">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 rounded-2xl flex items-center justify-center shadow-xl group-hover:shadow-2xl transition-all duration-500 transform group-hover:scale-110 group-hover:rotate-3">
-                <span className="text-white text-2xl animate-pulse">🐟</span>
+          <Link to="/" className="flex items-center space-x-2 sm:space-x-4 group min-w-0 flex-1 mr-2">
+            <div className="relative flex-shrink-0">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg sm:shadow-xl group-hover:shadow-2xl transition-all duration-500 transform group-hover:scale-110 group-hover:rotate-3">
+                <span className="text-white text-lg sm:text-2xl">🐟</span>
               </div>
-              {/* Animated ring */}
-              <div className="absolute inset-0 rounded-2xl border-2 border-blue-400/30 group-hover:border-blue-400/60 transition-all duration-500 group-hover:scale-110"></div>
+              <div className="absolute inset-0 rounded-xl sm:rounded-2xl border-2 border-blue-400/30 group-hover:border-blue-400/60 transition-all duration-500 group-hover:scale-110 hidden sm:block"></div>
             </div>
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-cyan-700 transition-all duration-300">
+            <div className="space-y-0.5 min-w-0">
+              <h1 className="text-base sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent truncate">
                 {shopInfo.name}
               </h1>
-              <p className="text-sm text-gray-600 font-medium bg-blue-50 text-blue-700 px-3 py-1 rounded-full inline-block">
+              <p className="hidden xs:inline-block sm:inline-block text-[10px] sm:text-sm text-gray-600 font-medium bg-blue-50 text-blue-700 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full">
                 🌅 Fresh Every Morning
               </p>
             </div>
@@ -42,13 +46,13 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                 key={item.path}
                 to={item.path}
                 className={`relative px-4 py-3 text-sm font-bold rounded-xl transition-all duration-300 group ${
-                  location.pathname === item.path
+                  isActivePath(item.path)
                     ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-600 shadow-lg'
                     : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50'
                 }`}
               >
                 <span className="relative z-10">{item.label}</span>
-                {location.pathname === item.path && (
+                {isActivePath(item.path) && (
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl shadow-lg"></div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -135,7 +139,7 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                   key={item.path}
                   to={item.path}
                   className={`block px-4 py-3 rounded-xl text-base font-bold transition-all duration-300 ${
-                    location.pathname === item.path
+                    isActivePath(item.path)
                       ? 'text-white bg-gradient-to-r from-blue-600 to-cyan-600 shadow-lg'
                       : 'text-gray-700 hover:text-blue-600 hover:bg-white/80'
                   }`}

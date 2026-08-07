@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const repoName = 'AjaySeaFoods'
+const repoName = 'PR_Nexus_FishMart'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -17,7 +17,10 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      sourcemap: false,
+      minify: 'esbuild',
+      cssMinify: true,
+      chunkSizeWarningLimit: 1000,
     },
   }
 })

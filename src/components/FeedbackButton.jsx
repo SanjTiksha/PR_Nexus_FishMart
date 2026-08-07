@@ -1,13 +1,17 @@
 import { useState } from 'react';
+import { COMPANY_EMAILS, mailto } from '../data/companyEmails';
 
 const FeedbackButton = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleFeedback = () => {
-    // Open email client with pre-filled subject
-    const subject = encodeURIComponent('Feedback - Rajesh Fish Market');
-    const body = encodeURIComponent('Hi,\n\nI would like to share my feedback about your fish market:\n\n');
-    window.open(`mailto:rajeshfishmarket@gmail.com?subject=${subject}&body=${body}`);
+    window.open(
+      mailto(
+        COMPANY_EMAILS.support,
+        'Feedback - PR Nexus FishMart',
+        'Hi,\n\nI would like to share my feedback about PR Nexus FishMart:\n\n'
+      )
+    );
   };
 
   return (

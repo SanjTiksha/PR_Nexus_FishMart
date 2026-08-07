@@ -1,7 +1,9 @@
 import React from "react";
 
 const SmartBanner = ({ fishData }) => {
-  const fishes = Array.isArray(fishData?.fishes) ? fishData.fishes : [];
+  const fishes = Array.isArray(fishData?.fishes)
+    ? fishData.fishes.filter((fish) => fish.inStock !== false && fish.available !== false)
+    : [];
   const marqueeItems = fishes.length > 0 ? [...fishes, ...fishes] : [];
   const animationDurationSeconds = Math.max(marqueeItems.length * 3, 18);
   const shouldAnimate = marqueeItems.length > 1;
@@ -37,14 +39,8 @@ const SmartBanner = ({ fishData }) => {
                 >
                   <span className="text-sm sm:text-base font-semibold truncate max-w-[120px] sm:max-w-none">{fish.name}</span>
                   <span className="text-base sm:text-lg font-bold text-yellow-300">₹{fish.rate}</span>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
-                      fish.inStock
-                        ? "bg-green-200 text-green-800"
-                        : "bg-red-200 text-red-800"
-                    }`}
-                  >
-                    {fish.inStock ? "In Stock" : "Out of Stock"}
+                  <span className="text-xs px-2 py-1 rounded-full whitespace-nowrap bg-green-200 text-green-800">
+                    In Stock
                   </span>
                 </div>
               ))}

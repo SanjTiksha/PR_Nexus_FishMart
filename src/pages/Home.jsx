@@ -3,9 +3,12 @@ import Reviews from '../components/Reviews';
 import SmartBanner from '../components/SmartBanner';
 import HeroSliderSimple from '../components/HeroSliderSimple';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
+import { COMPANY_EMAILS, mailto } from '../data/companyEmails';
 
 const Home = ({ fishData, refreshFishData }) => {
-  const featuredFishes = fishData.fishes.slice(0, 4);
+  const featuredFishes = fishData.fishes
+    .filter((fish) => fish.inStock !== false && fish.available !== false)
+    .slice(0, 4);
   const location = useLocation();
   
   // Check if user is admin (only through URL parameter for security)
@@ -29,32 +32,61 @@ const Home = ({ fishData, refreshFishData }) => {
         </div>
       </section>
 
-      {/* Additional Hero Content for Better Visual Impact */}
+      {/* Brand / Company Hero Content */}
       <section className="py-12 sm:py-16 bg-gradient-to-b from-white via-blue-50 to-cyan-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-4">
-              <span className="bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Premium Quality</span> Fish
+          <div className="text-center max-w-4xl mx-auto">
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-gray-900 mb-2">
+              <span className="bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                PR Nexus FishMart
+              </span>
             </h2>
-            <p className="text-base sm:text-lg text-gray-600 leading-relaxed mb-6 max-w-3xl mx-auto">
-              Direct from the ocean to your table. We bring you the freshest catch every morning with guaranteed quality and competitive prices.
+            <p className="text-base sm:text-lg font-semibold text-blue-700 mb-4 tracking-wide">
+              A Venture of PR Nexus Group
             </p>
-            <div className="flex flex-wrap justify-center gap-4 text-sm text-gray-600">
-              <div className="flex items-center space-x-2">
-                <span className="text-green-500">✓</span>
-                <span>Fresh Daily</span>
+            <p className="text-xl sm:text-2xl font-semibold text-gray-800 mb-5">
+              Fresh Seafood. Trusted Quality. Delivered Daily.
+            </p>
+            <p className="text-base sm:text-lg text-gray-600 leading-relaxed mb-8 max-w-3xl mx-auto">
+              Delivering premium-quality fresh fish with hygiene, fair pricing, and exceptional customer service.
+              From the sea to your table — fresh, hygienic, and responsibly sourced seafood delivered with quality, trust, and care.
+            </p>
+
+            {/* Business stats */}
+            <div className="grid grid-cols-3 gap-4 sm:gap-8 max-w-2xl mx-auto mb-10">
+              <div className="text-center">
+                <div className="text-2xl sm:text-4xl font-bold text-blue-600">15+</div>
+                <div className="text-xs sm:text-sm text-gray-600 mt-1">Years of Industry Experience</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-green-500">✓</span>
-                <span>Best Prices</span>
+              <div className="text-center">
+                <div className="text-2xl sm:text-4xl font-bold text-blue-600">1000+</div>
+                <div className="text-xs sm:text-sm text-gray-600 mt-1">Happy Customers</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-green-500">✓</span>
-                <span>Fast Delivery</span>
+              <div className="text-center">
+                <div className="text-2xl sm:text-4xl font-bold text-blue-600">Daily</div>
+                <div className="text-xs sm:text-sm text-gray-600 mt-1">Fresh Fish Supply</div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-green-500">✓</span>
-                <span>Quality Guaranteed</span>
+            </div>
+
+            {/* Business Highlights */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-blue-100 shadow-sm px-5 py-6 sm:px-8 sm:py-8">
+              <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-5">Business Highlights</h3>
+              <div className="flex flex-wrap justify-center gap-3 sm:gap-4 text-sm sm:text-base text-gray-700">
+                {[
+                  'Premium Quality Seafood',
+                  'Daily Fresh Stock',
+                  'Hygienic Processing',
+                  'Affordable Prices',
+                  'Fast Delivery'
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="flex items-center space-x-2 bg-cyan-50 rounded-full px-4 py-2 border border-cyan-100"
+                  >
+                    <span className="text-green-600 font-bold">✓</span>
+                    <span className="font-medium">{item}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -77,7 +109,7 @@ const Home = ({ fishData, refreshFishData }) => {
             </h2>
             <div className="h-1 w-16 bg-gradient-to-r from-blue-600 to-cyan-500 mx-auto mb-4 rounded-full"></div>
             <p className="text-base sm:text-lg text-gray-700 font-medium max-w-3xl mx-auto leading-relaxed">
-              Discover why customers trust Ajay Sea Foods for unmatched freshness, quality, and service — every single day.
+              A brand under PR Nexus Group — trusted for unmatched freshness, quality, and service every single day.
             </p>
           </div>
 
@@ -246,7 +278,7 @@ const Home = ({ fishData, refreshFishData }) => {
             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 mb-4">What Our Customers Say</h2>
             <div className="h-1 w-16 bg-gradient-to-r from-blue-600 to-cyan-500 mx-auto mb-4 rounded-full"></div>
             <p className="text-sm sm:text-base text-gray-600 leading-relaxed max-w-3xl mx-auto">
-              Don't just take our word for it - hear from our satisfied customers about their experience with Ajay Sea Foods.
+              Don't just take our word for it - hear from our satisfied customers about their experience with PR Nexus FishMart.
             </p>
             
           </div>
@@ -309,6 +341,14 @@ const Home = ({ fishData, refreshFishData }) => {
             >
               <span className="text-lg">💬</span>
               <span>WhatsApp Now</span>
+              <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
+            </a>
+            <a
+              href={mailto(COMPANY_EMAILS.sales, 'Sales Enquiry - PR Nexus FishMart')}
+              className="group flex items-center justify-center space-x-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-6 py-3 rounded-lg font-semibold text-base shadow-2xl hover:shadow-blue-500/25 transition-all duration-300 transform hover:-translate-y-1 hover:scale-105"
+            >
+              <span className="text-lg">📧</span>
+              <span>Email Sales</span>
               <span className="group-hover:translate-x-1 transition-transform duration-300">→</span>
             </a>
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, ShoppingBag, CreditCard, ArrowRight, MapPin, Phone, User } from 'lucide-react';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import { normalizeQuantity, calculateLineTotal } from '../utils/quantityUtils';
+import DeliveryLocationPicker from './DeliveryLocationPicker';
 
 const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPayment }) => {
   const [isAnimating, setIsAnimating] = useState(false);
@@ -11,9 +12,8 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
     mobileNumber: '',
     address: '',
     landmark: '',
-    city: '',
-    pincode: '',
-    deliveryInstructions: ''
+    deliveryInstructions: '',
+    location: null
   });
 
   // Debug logging
@@ -44,7 +44,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
     console.log('CheckoutConfirmation: Delivery Info to be submitted:', deliveryInfo);
     
     // Validate required fields
-    if (!deliveryInfo.customerName || !deliveryInfo.mobileNumber || !deliveryInfo.address || !deliveryInfo.city || !deliveryInfo.pincode) {
+    if (!deliveryInfo.customerName || !deliveryInfo.mobileNumber || !deliveryInfo.address) {
       alert('Please fill in all required fields');
       return;
     }
@@ -56,10 +56,8 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
       return;
     }
 
-    // Validate pincode
-    const pincodeRegex = /^\d{6}$/;
-    if (!pincodeRegex.test(deliveryInfo.pincode)) {
-      alert('Please enter a valid 6-digit pincode');
+    if (!deliveryInfo.location?.confirmed || !deliveryInfo.location?.lat || !deliveryInfo.location?.lng) {
+      alert('Please set and confirm your delivery location on the map.');
       return;
     }
 
@@ -85,7 +83,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ zIndex: 9999 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -94,8 +92,8 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
       }}
     >
       <div 
-        className={`bg-white rounded-2xl w-full max-w-md transform transition-all duration-300 ${
-          isAnimating ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+        className={`bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[94vh] overflow-y-auto transform transition-all duration-300 pb-safe ${
+          isAnimating ? 'translate-y-0 sm:scale-100 opacity-100' : 'translate-y-8 sm:translate-y-0 sm:scale-95 opacity-0'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -119,7 +117,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-h-[78vh] overflow-y-auto">
           {!showDeliveryForm ? (
             <>
               {/* Order Summary */}
@@ -172,10 +170,10 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
               </div>
 
               {/* Action Buttons */}
-              <div className="flex space-x-3">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:space-x-3 sm:gap-0">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                  className="flex-1 min-h-[48px] py-3 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium active:bg-gray-100"
                 >
                   Cancel
                 </button>
@@ -186,7 +184,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                     console.log('Button clicked directly!');
                     handleProceed();
                   }}
-                  className="flex-1 flex items-center justify-center space-x-2 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="flex-1 min-h-[48px] flex items-center justify-center space-x-2 py-3 px-4 bg-blue-600 text-white rounded-xl font-semibold active:bg-blue-800"
                 >
                   <span>Add Delivery Info</span>
                   <ArrowRight className="w-4 h-4" />
@@ -219,7 +217,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       name="customerName"
                       value={deliveryInfo.customerName}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                       placeholder="Enter your full name"
                       required
                     />
@@ -236,12 +234,20 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       name="mobileNumber"
                       value={deliveryInfo.mobileNumber}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                       placeholder="Enter 10-digit mobile number"
                       maxLength="10"
                       required
                     />
                   </div>
+
+                  {/* Delivery Location Map */}
+                  <DeliveryLocationPicker
+                    key="delivery-location-picker"
+                    onChange={(location) => {
+                      setDeliveryInfo((prev) => ({ ...prev, location }));
+                    }}
+                  />
 
                   {/* Address */}
                   <div>
@@ -254,8 +260,8 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       value={deliveryInfo.address}
                       onChange={handleInputChange}
                       rows="3"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="House/Flat No., Building, Street"
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                      placeholder="House/Flat No., Building, Street, City, Pincode"
                       required
                     />
                   </div>
@@ -270,42 +276,9 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       name="landmark"
                       value={deliveryInfo.landmark}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                       placeholder="Nearby landmark (optional)"
                     />
-                  </div>
-
-                  {/* City and Pincode */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        City *
-                      </label>
-                      <input
-                        type="text"
-                        name="city"
-                        value={deliveryInfo.city}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="City"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Pincode *
-                      </label>
-                      <input
-                        type="text"
-                        name="pincode"
-                        value={deliveryInfo.pincode}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="6-digit pincode"
-                        maxLength="6"
-                        required
-                      />
-                    </div>
                   </div>
 
                   {/* Delivery Instructions */}
@@ -318,23 +291,23 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       value={deliveryInfo.deliveryInstructions}
                       onChange={handleInputChange}
                       rows="2"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                       placeholder="Any special delivery instructions (optional)"
                     />
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex space-x-3 pt-4">
+                  <div className="flex flex-col-reverse sm:flex-row gap-2 sm:space-x-3 sm:gap-0 pt-4 sticky bottom-0 bg-white pb-1">
                     <button
                       type="button"
                       onClick={() => setShowDeliveryForm(false)}
-                      className="flex-1 py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                      className="flex-1 min-h-[48px] py-3 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium active:bg-gray-100"
                     >
                       Back
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 flex items-center justify-center space-x-2 py-3 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                      className="flex-1 min-h-[48px] flex items-center justify-center space-x-2 py-3 px-4 bg-green-600 text-white rounded-xl font-semibold active:bg-green-800"
                     >
                       <span>Proceed to Payment</span>
                       <ArrowRight className="w-4 h-4" />

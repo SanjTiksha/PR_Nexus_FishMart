@@ -28,7 +28,7 @@ const FishCard = ({ fish, shopInfo, addToCart, cart }) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${fish.name} - ${shopInfo?.name || 'Ajay Sea Foods'}`,
+          title: `${fish.name} - ${shopInfo?.name || 'PR Nexus FishMart'}`,
           text: `Check out this fresh ${fish.name} at ₹${fish.rate}/${fish.unit}`,
           url: window.location.href
         });
