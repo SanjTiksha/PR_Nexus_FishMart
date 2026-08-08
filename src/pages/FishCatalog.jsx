@@ -257,20 +257,12 @@ const FishCatalog = ({ fishData, addToCart, onBuyNow, toggleFavorite, favorites,
           </div>
 
           {/* Fish Grid - Main Content */}
-          <div className="flex-1">
-            {/* Premium Section Header */}
-            <div className="mb-4 sm:mb-8">
-              <h2 className="text-xl sm:text-3xl font-extrabold text-gray-800 mb-1 sm:mb-4">
-                🐟 Fresh Catch of the Day
-              </h2>
-              <p className="text-gray-500 text-sm sm:text-lg mb-2 sm:mb-6">Handpicked seafood delivered daily.</p>
-            </div>
-
+          <div className="flex-1 min-w-0">
           {filteredFishes.length === 0 ? (
-            <div className="text-center py-20">
-              <div className="text-8xl mb-6 animate-float">🐟</div>
-              <h3 className="text-3xl font-bold text-gray-900 mb-4">No fish found</h3>
-              <p className="text-gray-600 mb-8 text-lg">Try adjusting your search or filters to find what you're looking for</p>
+            <div className="text-center py-12">
+              <div className="text-5xl mb-3">🐟</div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">No fish found</h3>
+              <p className="text-gray-600 mb-5 text-sm">Try adjusting your search or filters</p>
               <button
                 onClick={() => {
                   setSearchTerm('');
@@ -279,24 +271,22 @@ const FishCatalog = ({ fishData, addToCart, onBuyNow, toggleFavorite, favorites,
                   setSortOrder('asc');
                   setPriceRange({ min: 0, max: 10000 });
                 }}
-                className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm"
               >
-                <span className="mr-2">🔄</span>
                 Clear Filters
               </button>
             </div>
           ) : (
             <>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-8 gap-2">
-                <div>
-                  <h2 className="text-lg sm:text-2xl font-bold text-gray-800">
-                      {filteredFishes.length} Fish Available
-                  </h2>
-                  <p className="text-gray-500 text-sm">Fresh catch ready for order</p>
-                </div>
+              <div className="flex items-center justify-between gap-2 mb-3 px-0.5">
+                <h2 className="text-sm sm:text-base font-bold text-gray-800 truncate">
+                  🐟 Fresh Catch
+                  <span className="font-medium text-gray-500"> · {filteredFishes.length} available</span>
+                </h2>
+                <span className="hidden sm:inline text-xs text-gray-400 shrink-0">Daily delivery</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 px-0 sm:px-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 px-0 sm:px-2">
                 {filteredFishes.map((fish) => (
                   <EnhancedFishCard
                     key={fish.id}
