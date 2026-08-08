@@ -5,8 +5,10 @@ import {
   buildUpiPayment,
   copyTextToClipboard,
   detectPaymentDevice,
+  launchSpecificUpiApp,
   launchUpiPayment,
   logPaymentAttempt,
+  UPI_PAYMENT_APPS,
 } from '../utils/upiPayment';
 
 const QRModal = ({
@@ -52,6 +54,7 @@ const QRModal = ({
   const amount = paymentBuild.amount || formatDisplayAmount(payableAmount);
   const upiUri = paymentBuild.upiUri || '';
   const intentUri = paymentBuild.intentUri || '';
+  const appLinks = paymentBuild.appLinks || {};
 
   useEffect(() => {
     const refresh = () => setDevice(detectPaymentDevice());
@@ -191,6 +194,44 @@ const QRModal = ({
     }
   };
 
+  const handlePayWithApp = (app) => {
+    setLaunchError('');
+    setLaunchMessage('');
+
+    if (paymentBuild.error || !appLinks?.upi) {
+      setLaunchError(
+        paymentBuild.error ||
+          'Unable to open that UPI app. Copy the UPI ID or scan the QR code instead.',
+      );
+      return;
+    }
+
+    // Desktop: guide to QR / copy — custom schemes rarely work in desktop browsers
+    if (!device.isIOS && !device.isAndroid) {
+      setLaunchMessage(
+        `On desktop, scan the QR with ${app.label} on your phone, or copy the UPI ID.`,
+      );
+      return;
+    }
+
+    const primaryUrl = appLinks[app.linkKey] || appLinks.upi;
+    // Only chain a second scheme when the app defines one (e.g. GPay → tez)
+    const fallbackUrl = app.fallbackKey ? appLinks[app.fallbackKey] : null;
+
+    const result = launchSpecificUpiApp({ primaryUrl, fallbackUrl });
+
+    if (!result.launched) {
+      setLaunchError(result.message);
+      return;
+    }
+
+    setLaunchMessage(
+      app.id === 'whatsapp'
+        ? 'Opening UPI chooser — select WhatsApp Pay if listed. Or Copy UPI ID and pay inside WhatsApp.'
+        : result.message,
+    );
+  };
+
   const handleSubmitPaymentClaim = () => {
     if (!isCheckoutFlow || !onPaymentDone || !transactionId.trim()) return;
     onPaymentDone(transactionId.trim(), {
@@ -266,17 +307,36 @@ const QRModal = ({
             </div>
           )}
 
-          {/* MOBILE order: Pay → Copy → QR → Instructions */}
+          {/* MOBILE: choose UPI app → Copy → QR → Instructions */}
           {isMobile && (
             <div className="space-y-3">
-              <button
-                type="button"
-                onClick={handlePayViaUpi}
-                disabled={!!paymentBuild.error}
-                className="w-full min-h-[52px] rounded-xl bg-green-600 text-white text-base font-bold active:bg-green-800 disabled:bg-gray-300"
-              >
-                Pay ₹{amount} via UPI
-              </button>
+              <div className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4">
+                <h4 className="text-sm font-bold text-gray-900 mb-1">Choose payment app</h4>
+                <p className="text-xs text-gray-500 mb-3">
+                  Tap the app you use — GPay, PhonePe, Paytm, BHIM, or WhatsApp Pay
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {UPI_PAYMENT_APPS.map((app) => (
+                    <button
+                      key={app.id}
+                      type="button"
+                      onClick={() => handlePayWithApp(app)}
+                      disabled={!!paymentBuild.error}
+                      className={`min-h-[48px] rounded-xl ${app.color} text-white text-sm font-bold active:opacity-90 disabled:bg-gray-300 disabled:text-gray-500`}
+                    >
+                      {app.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={handlePayViaUpi}
+                  disabled={!!paymentBuild.error}
+                  className="w-full mt-2 min-h-[44px] rounded-xl border-2 border-green-600 text-green-700 text-sm font-semibold active:bg-green-50 disabled:opacity-50"
+                >
+                  Open system UPI chooser
+                </button>
+              </div>
 
               <button
                 type="button"
@@ -325,23 +385,18 @@ const QRModal = ({
               </div>
 
               <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-3 text-xs text-amber-900 space-y-1.5">
-                <p className="font-semibold">Payment instructions</p>
-                {isIOS ? (
-                  <>
-                    <p>1. Prefer Copy UPI ID or Scan QR inside Paytm / PhonePe / Google Pay.</p>
-                    <p>2. Safari often cannot open UPI apps reliably.</p>
-                  </>
-                ) : (
-                  <>
-                    <p>1. Tap Pay via UPI and choose your UPI app.</p>
-                    <p>2. Or scan the QR / copy UPI ID as fallback.</p>
-                  </>
-                )}
-                <p>3. Opening a UPI app is not payment confirmation.</p>
+                <p className="font-semibold">If payment fails after the app opens</p>
                 <p>
-                  4. If the bank rejects payment: no amount is marked paid — try again or another UPI
-                  app.
+                  1. Deep links often fail on personal UPI IDs (bank / GPay blocks auto-filled
+                  merchant-style payments). Copy UPI ID or Scan QR usually works.
                 </p>
+                <p>2. Opening GPay/PhonePe is not payment success — confirm ₹{amount} in the app.</p>
+                {isIOS ? (
+                  <p>3. On iPhone, prefer Copy UPI ID or Scan QR (Safari deep links are unreliable).</p>
+                ) : (
+                  <p>3. If one app rejects, try another button, or Copy UPI ID and paste Send money.</p>
+                )}
+                <p>4. After you pay, enter UTR below so we can confirm the order.</p>
               </div>
             </div>
           )}
@@ -384,8 +439,28 @@ const QRModal = ({
                 <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 p-5 rounded-2xl">
                   <h4 className="text-lg font-bold text-gray-900 mb-2">UPI ID</h4>
                   <p className="font-mono text-sm break-all bg-white p-3 rounded border">{merchantUpiId}</p>
-                  <p className="text-xs text-gray-500 mt-2">🏪 {merchantName}</p>
+                  <p className="text-xs text-gray-500 mt-2">{merchantName}</p>
                   <p className="text-xs text-gray-500">Payment ref: {paymentRef}</p>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                  <h4 className="text-sm font-bold text-gray-900 mb-1">Choose payment app</h4>
+                  <p className="text-xs text-gray-500 mb-3">
+                    On phone: tap an app. On desktop: scan QR with that app.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {UPI_PAYMENT_APPS.map((app) => (
+                      <button
+                        key={app.id}
+                        type="button"
+                        onClick={() => handlePayWithApp(app)}
+                        disabled={!!paymentBuild.error}
+                        className={`min-h-[44px] rounded-xl ${app.color} text-white text-sm font-bold hover:opacity-90 disabled:bg-gray-300`}
+                      >
+                        {app.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <button
@@ -398,21 +473,13 @@ const QRModal = ({
                   {copied ? 'UPI ID copied' : 'Copy UPI ID'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handlePayViaUpi}
-                  className="w-full min-h-[48px] rounded-xl bg-green-600 text-white font-bold hover:bg-green-700"
-                >
-                  Pay ₹{amount} via UPI
-                </button>
-
-                <div className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 text-xs text-gray-600 space-y-1">
-                  <p className="font-semibold text-gray-800">Payment instructions</p>
-                  <p>Scan the QR or copy the UPI ID in your UPI app.</p>
-                  <p>Opening a UPI link is not payment confirmation.</p>
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-3 text-xs text-amber-900 space-y-1">
+                  <p className="font-semibold">If payment fails after the app opens</p>
                   <p>
-                    If payment fails at the bank/UPI app, no amount is marked paid on this order.
+                    Personal UPI deep links are often blocked inside GPay/PhonePe. Scan QR or Copy
+                    UPI ID + Send money usually works.
                   </p>
+                  <p>Opening an app is not payment confirmation — enter UTR after you pay.</p>
                 </div>
               </div>
             </div>

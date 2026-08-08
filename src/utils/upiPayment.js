@@ -17,6 +17,51 @@ export const formatUpiAmount = (value) => {
 };
 
 /**
+ * App-specific UPI deep links so the user can open GPay / PhonePe / Paytm / BHIM directly.
+ * WhatsApp Pay usually has no stable private scheme — falls back to generic upi://.
+ */
+export const buildUpiAppLinks = (params = {}) => {
+  const pa = String(params.pa || '').trim();
+  const pn = String(params.pn || 'PR Nexus FishMart').trim();
+  const am = String(params.am || '').trim();
+  const tr = String(params.tr || '').trim();
+
+  // App schemes often accept fully encoded query values (including pa @ → %40)
+  const encodedQuery = [
+    `pa=${encodeURIComponent(pa)}`,
+    `pn=${encodeURIComponent(pn)}`,
+    `am=${encodeURIComponent(am)}`,
+    tr ? `tr=${encodeURIComponent(tr)}` : null,
+    'cu=INR',
+  ]
+    .filter(Boolean)
+    .join('&');
+
+  // Generic upi:// keeps literal @ in pa (matches our QR / Pay via UPI format)
+  const upiQuery = [
+    `pa=${pa}`,
+    `pn=${encodeURIComponent(pn)}`,
+    tr ? `tr=${tr}` : null,
+    `am=${am}`,
+  ]
+    .filter(Boolean)
+    .join('&');
+
+  const upiUri = `upi://pay?${upiQuery}`;
+
+  return {
+    upi: upiUri,
+    gpay: `gpay://upi/pay?${encodedQuery}`,
+    tez: `tez://upi/pay?${encodedQuery}`,
+    phonepe: `phonepe://pay?${encodedQuery}`,
+    paytm: `paytmmp://pay?${encodedQuery}`,
+    bhim: `bhim://upi/pay?${encodedQuery}`,
+    // No reliable WhatsApp-Pay-only scheme; use UPI intent so WhatsApp can appear in chooser
+    whatsapp: upiUri,
+  };
+};
+
+/**
  * Build a Personal (P2P) UPI deep link for checkout.
  *
  * Format: upi://pay?pa=...&pn=...&tr=...&am=...
@@ -27,7 +72,7 @@ export const formatUpiAmount = (value) => {
  * - tr: unique per-checkout reference
  * - am: dynamic order amount
  *
- * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
+ * @returns {{ upiUri: string, params: Record<string,string>, appLinks: object, amount: string, paymentRef: string } | { error: string }}
  */
 export const buildUpiPayment = ({
   merchantUpiId,
@@ -62,20 +107,72 @@ export const buildUpiPayment = ({
     `&tr=${tr}` +
     `&am=${am}`;
 
+  const appLinks = buildUpiAppLinks(params);
+
   if (import.meta.env.DEV) {
     console.log('[UPI] payee:', pa);
     console.log('[UPI] amount:', am);
     console.log('[UPI] paymentRef:', tr);
     console.log('[UPI] params:', params);
     console.log('[UPI] upiUri:', upiUri);
+    console.log('[UPI] appLinks:', appLinks);
   }
 
   return {
     upiUri,
     params,
+    appLinks,
     amount: am,
     paymentRef: tr,
   };
+};
+
+/** Payment apps shown on the checkout page (user picks one). */
+export const UPI_PAYMENT_APPS = [
+  { id: 'gpay', label: 'Google Pay', color: 'bg-[#1a73e8]', linkKey: 'gpay', fallbackKey: 'tez' },
+  { id: 'phonepe', label: 'PhonePe', color: 'bg-[#5f259f]', linkKey: 'phonepe' },
+  { id: 'paytm', label: 'Paytm', color: 'bg-[#00baf2]', linkKey: 'paytm' },
+  { id: 'bhim', label: 'BHIM', color: 'bg-[#00afd5]', linkKey: 'bhim' },
+  { id: 'whatsapp', label: 'WhatsApp Pay', color: 'bg-[#25D366]', linkKey: 'whatsapp' },
+  { id: 'upi', label: 'Other UPI', color: 'bg-gray-800', linkKey: 'upi' },
+];
+
+/**
+ * Open a specific UPI app link. Falls back to generic upi:// if needed.
+ * Opening an app is NOT payment confirmation.
+ */
+export const launchSpecificUpiApp = ({ primaryUrl, fallbackUrl }) => {
+  const fallbackMessage =
+    'Unable to open that UPI app. Try another app, copy the UPI ID, or scan the QR code.';
+
+  if (!primaryUrl) {
+    return { launched: false, message: fallbackMessage };
+  }
+
+  try {
+    window.location.href = primaryUrl;
+
+    // Only try alt scheme if page is still focused (app likely did not open)
+    if (fallbackUrl && fallbackUrl !== primaryUrl) {
+      setTimeout(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          try {
+            window.location.href = fallbackUrl;
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 1200);
+    }
+
+    return {
+      launched: true,
+      message:
+        'UPI app opening. Complete payment there. If it fails, use Copy UPI ID or Scan QR — those work even when deep links fail.',
+    };
+  } catch {
+    return { launched: false, message: fallbackMessage };
+  }
 };
 
 export const detectPaymentDevice = () => {
