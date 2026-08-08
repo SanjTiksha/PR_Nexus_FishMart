@@ -3,8 +3,6 @@
  * Builds NPCI-style upi://pay URIs and device detection for Android / iOS / desktop.
  */
 
-import { PAYMENT_MERCHANT_CATEGORY_CODE } from '../config/paymentConfig';
-
 export const createPaymentReference = () => {
   const stamp = Date.now().toString(36).toUpperCase();
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -17,9 +15,18 @@ export const formatUpiAmount = (value) => {
   return num.toFixed(2);
 };
 
+/** Fixed transaction purpose note (URL-encoded in the deep link). */
+export const UPI_TRANSACTION_NOTE = 'Fish Mart Order';
+
 /**
- * Build a standard UPI pay URI from a locked payment session.
- * Includes MCC (mc) so GPay merchant-intent checks have category metadata.
+ * Build NPCI-style UPI deep link for checkout.
+ *
+ * Encoding rules:
+ * - pa: literal '@' (NOT %40) — required by some GPay merchant checks
+ * - pn / tn: URL-encoded
+ * - tr: unique per-checkout alphanumeric reference (not hardcoded)
+ * - mc: 5411 (retail food / fish market)
+ *
  * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
  */
 export const buildUpiPayment = ({
@@ -31,41 +38,45 @@ export const buildUpiPayment = ({
   const pa = String(merchantUpiId || '').trim();
   const pn = String(merchantName || 'PR Nexus FishMart').trim();
   const am = formatUpiAmount(amount);
-  const ref = String(paymentRef || createPaymentReference()).trim();
-  const mc = String(PAYMENT_MERCHANT_CATEGORY_CODE || '5411').trim() || '5411';
+  const tr = String(paymentRef || createPaymentReference()).trim();
+  const tn = UPI_TRANSACTION_NOTE;
+  // Retail food / fish sales MCC (hardcoded default 5411)
+  const mc = '5411';
 
-  // Keep { error } return shape for QRModal compatibility (do not throw)
-  if (!pa || !pa.includes('@')) {
+  if (!pa || !pa.includes('@') || !/^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/.test(pa)) {
     return { error: 'Merchant UPI ID is missing or invalid.' };
   }
   if (!am || Number(am) <= 0) {
     return { error: 'Invalid payment amount.' };
   }
-  if (!ref) {
-    return { error: 'Payment reference is missing.' };
+  if (!tr || !/^[A-Za-z0-9]+$/.test(tr)) {
+    return { error: 'Payment reference is missing or invalid.' };
   }
 
-  // Paytm merchant QR VPAs (@ptys / @paytm) reject UPI note/reference fields.
-  // GPay shows: "Can't add description" → then "Invalid UPI".
-  // Paste-only works because no tn/tr is sent. Keep ref in our app only.
-  const isPaytmMerchantQr = /@(ptys|paytm)\b/i.test(pa);
+  const params = {
+    pa, // stored raw for logging / QR payload metadata
+    pn,
+    tr,
+    tn,
+    am,
+    cu: 'INR',
+    mc,
+  };
 
-  // mc=5411 = Grocery Stores / Markets (fish market)
-  const params = isPaytmMerchantQr
-    ? { pa, pn, am, cu: 'INR', mc }
-    : { pa, pn, tr: ref, tn: ref, am, cu: 'INR', mc };
-
-  // encodeURIComponent is correct (@ → %40, spaces → %20)
-  const query = Object.entries(params)
-    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-    .join('&');
-
-  const upiUri = `upi://pay?${query}`;
+  // Selective encoding: keep literal '@' in pa; encode pn + tn
+  const upiUri =
+    `upi://pay?pa=${pa}` +
+    `&pn=${encodeURIComponent(pn)}` +
+    `&mc=${mc}` +
+    `&tr=${tr}` +
+    `&tn=${encodeURIComponent(tn)}` +
+    `&am=${am}` +
+    `&cu=INR`;
 
   if (import.meta.env.DEV) {
     console.log('[UPI] merchant:', pa);
     console.log('[UPI] amount:', am);
-    console.log('[UPI] paymentRef:', ref);
+    console.log('[UPI] paymentRef:', tr);
     console.log('[UPI] params:', params);
     console.log('[UPI] upiUri:', upiUri);
   }
@@ -74,7 +85,7 @@ export const buildUpiPayment = ({
     upiUri,
     params,
     amount: am,
-    paymentRef: ref,
+    paymentRef: tr,
   };
 };
 
@@ -147,24 +158,18 @@ export const copyTextToClipboard = async (text) => {
 };
 
 /**
- * Launch UPI app via standard upi:// URI only.
- * Does NOT use intent:// as the primary (or any) launch mechanism.
- * Opening UPI is not payment confirmation.
- * Signature kept compatible: intentUri accepted but unused.
+ * Platform-specific UPI launch (standard upi:// only — no intent://).
+ * Opening a UPI app is NOT payment confirmation.
  */
 export const launchUpiPayment = ({ upiUri, intentUri: _intentUri, isIOS, isAndroid }) => {
   const fallbackMessage =
     'Unable to open your UPI app. You can copy the UPI ID or scan the QR code to complete payment.';
 
-  if (!upiUri) {
-    return {
-      launched: false,
-      method: 'none',
-      message: fallbackMessage,
-    };
+  if (!upiUri || !upiUri.startsWith('upi://pay?')) {
+    return { launched: false, method: 'none', message: fallbackMessage };
   }
 
-  // Desktop: do not assume a UPI app exists — use QR / Copy UPI ID
+  // Desktop: prefer QR / Copy UPI — do not assume a UPI app exists
   if (!isIOS && !isAndroid) {
     return {
       launched: false,
@@ -175,33 +180,21 @@ export const launchUpiPayment = ({ upiUri, intentUri: _intentUri, isIOS, isAndro
   }
 
   if (import.meta.env.DEV) {
-    console.log('[UPI] launch upiUri:', upiUri);
+    console.log('[UPI] launch platform:', isIOS ? 'ios' : 'android', 'upiUri:', upiUri);
   }
 
   try {
-    // Android + iPhone: navigate to standard upi:// URI (OS picks installed UPI app)
+    // Android + iOS: hand off to OS UPI handler (GPay / PhonePe / Paytm chooser)
     window.location.href = upiUri;
-
-    if (isIOS) {
-      return {
-        launched: true,
-        method: 'upi-uri',
-        message:
-          'If payment did not open, copy the UPI ID or scan the QR code in PhonePe / Google Pay.',
-      };
-    }
 
     return {
       launched: true,
-      method: 'upi-uri',
-      message:
-        'UPI app opened. Complete payment there. Opening the app is not payment confirmation.',
+      method: isIOS ? 'upi-uri-ios' : 'upi-uri-android',
+      message: isIOS
+        ? 'If payment did not open, copy the UPI ID or scan the QR code in your UPI app.'
+        : 'UPI app opened. Complete payment there. Opening the app is not payment confirmation.',
     };
   } catch {
-    return {
-      launched: false,
-      method: 'none',
-      message: fallbackMessage,
-    };
+    return { launched: false, method: 'none', message: fallbackMessage };
   }
 };
