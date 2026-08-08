@@ -37,17 +37,19 @@ export const buildUpiPayment = ({
     return { error: 'Order amount is invalid.' };
   }
 
-  // Paytm QR / merchant VPA (@ptys, @paytm) often reject UPI "tn" (description)
-  // and show "Can't add description". Keep paymentRef only in our app/order.
+  // Paytm QR VPAs (@ptys/@paytm) often reject "tn" and sometimes "pn"
+  // with GPay error: "Can't add description". Match paste-to-GPay behavior.
   const isPaytmStyleMerchant = /@(ptys|paytm)\b/i.test(pa);
 
-  // URI params sent to UPI apps / QR (no tn for Paytm-style merchants)
+  // Never send tn in deep-link/QR — keep paymentRef only in our app/order.
+  // Paytm: minimal pa+am+cu only. Others: include payee name.
   const params = isPaytmStyleMerchant
-    ? { pa, pn, am, cu: 'INR' }
-    : { pa, pn, am, cu: 'INR', tn: ref };
+    ? { pa, am, cu: 'INR' }
+    : { pa, pn, am, cu: 'INR' };
 
+  // Encode values only (keys stay plain) — more compatible with UPI apps
   const query = Object.entries(params)
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
 
   const upiUri = `upi://pay?${query}`;
