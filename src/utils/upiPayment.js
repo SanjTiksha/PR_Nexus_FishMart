@@ -17,7 +17,8 @@ export const formatUpiAmount = (value) => {
 
 /**
  * Build a standard UPI pay URI from a locked payment session.
- * @returns {{ upiUri: string, params: Record<string,string>, amount: string } | { error: string }}
+ * Same URI shape for all merchants (including Paytm @ptys / @paytm).
+ * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
  */
 export const buildUpiPayment = ({
   merchantUpiId,
@@ -28,7 +29,7 @@ export const buildUpiPayment = ({
   const pa = String(merchantUpiId || '').trim();
   const pn = String(merchantName || 'PR Nexus FishMart').trim();
   const am = formatUpiAmount(amount);
-  const ref = String(paymentRef || createPaymentReference()).trim();
+  const tn = String(paymentRef || createPaymentReference()).trim();
 
   if (!pa || !pa.includes('@')) {
     return { error: 'Merchant UPI ID is missing or invalid.' };
@@ -37,27 +38,26 @@ export const buildUpiPayment = ({
     return { error: 'Order amount is invalid.' };
   }
 
-  // Paytm QR VPAs (@ptys/@paytm) often reject "tn" and sometimes "pn"
-  // with GPay error: "Can't add description". Match paste-to-GPay behavior.
-  const isPaytmStyleMerchant = /@(ptys|paytm)\b/i.test(pa);
+  // Standard UPI params for ALL merchants (including Paytm-style)
+  const params = { pa, pn, am, cu: 'INR', tn };
 
-  // Never send tn in deep-link/QR — keep paymentRef only in our app/order.
-  // Paytm: minimal pa+am+cu only. Others: include payee name.
-  const params = isPaytmStyleMerchant
-    ? { pa, am, cu: 'INR' }
-    : { pa, pn, am, cu: 'INR' };
-
-  // Encode values only (keys stay plain) — more compatible with UPI apps
+  // Values encoded with encodeURIComponent — @ becomes %40 (correct)
   const query = Object.entries(params)
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
 
   const upiUri = `upi://pay?${query}`;
 
-  // Android Chrome app-chooser intent (lets user pick any installed UPI app)
+  // Kept for API compatibility only — launchUpiPayment must NOT use this as primary
   const intentUri = `intent://pay?${query}#Intent;scheme=upi;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
 
-  return { upiUri, intentUri, params, amount: am, paymentRef: ref };
+  if (import.meta.env.DEV) {
+    console.log('[UPI] merchantUpiId:', merchantUpiId);
+    console.log('[UPI] upiUri:', upiUri);
+    console.log('[UPI] params:', params);
+  }
+
+  return { upiUri, intentUri, params, amount: am, paymentRef: tn };
 };
 
 export const detectPaymentDevice = () => {
@@ -129,59 +129,51 @@ export const copyTextToClipboard = async (text) => {
 };
 
 /**
- * Launch UPI app. Returns { launched: boolean, method: string, message?: string }
+ * Launch UPI app via standard upi:// URI only.
+ * Does NOT use intent:// as the primary launch mechanism.
+ * Opening UPI is not payment confirmation.
+ * Signature kept compatible: intentUri / isAndroid accepted but unused for launch.
  */
-export const launchUpiPayment = ({ upiUri, intentUri, isIOS, isAndroid }) => {
+export const launchUpiPayment = ({ upiUri, intentUri: _intentUri, isIOS, isAndroid: _isAndroid }) => {
+  const fallbackMessage =
+    'Unable to open your UPI app. You can copy the UPI ID or scan the QR code to complete payment.';
+
   if (!upiUri) {
     return {
       launched: false,
       method: 'none',
-      message:
-        'Unable to open your UPI app. You can copy the UPI ID or scan the QR code to complete payment.',
+      message: fallbackMessage,
     };
   }
 
-  // iOS Safari: deep links are unreliable — caller should prefer QR / copy
-  if (isIOS) {
-    try {
-      window.location.href = upiUri;
-      return {
-        launched: true,
-        method: 'upi-uri-ios',
-        message:
-          'If payment did not open, copy the UPI ID or scan the QR code in PhonePe / Google Pay.',
-      };
-    } catch {
-      return {
-        launched: false,
-        method: 'upi-uri-ios',
-        message:
-          'Unable to open your UPI app. You can copy the UPI ID or scan the QR code to complete payment.',
-      };
-    }
+  if (import.meta.env.DEV) {
+    console.log('[UPI] launch upiUri:', upiUri);
   }
 
   try {
-    const target = isAndroid && intentUri ? intentUri : upiUri;
-    const anchor = document.createElement('a');
-    anchor.href = target;
-    anchor.style.display = 'none';
-    anchor.rel = 'noopener';
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    return { launched: true, method: isAndroid ? 'android-intent' : 'upi-uri' };
-  } catch {
-    try {
-      window.location.href = upiUri;
-      return { launched: true, method: 'location-href' };
-    } catch {
+    // Primary launch for Android, iOS, and desktop: navigate to standard upi:// URI
+    window.location.href = upiUri;
+
+    if (isIOS) {
       return {
-        launched: false,
-        method: 'none',
+        launched: true,
+        method: 'upi-uri',
         message:
-          'Unable to open your UPI app. You can copy the UPI ID or scan the QR code to complete payment.',
+          'If payment did not open, copy the UPI ID or scan the QR code in PhonePe / Google Pay.',
       };
     }
+
+    return {
+      launched: true,
+      method: 'upi-uri',
+      message:
+        'UPI app opened. Complete payment there. Opening the app is not payment confirmation.',
+    };
+  } catch {
+    return {
+      launched: false,
+      method: 'none',
+      message: fallbackMessage,
+    };
   }
 };
