@@ -42,15 +42,14 @@ export const buildUpiPayment = ({
     return { error: 'Payment reference is missing.' };
   }
 
-  // Standard UPI params — same for all UPI IDs (tr + tn both use ref)
-  const params = {
-    pa,
-    pn,
-    tr: ref,
-    tn: ref,
-    am,
-    cu: 'INR',
-  };
+  // Paytm merchant QR VPAs (@ptys / @paytm) reject UPI note/reference fields.
+  // GPay shows: "Can't add description" → then "Invalid UPI".
+  // Paste-only works because no tn/tr is sent. Keep ref in our app only.
+  const isPaytmMerchantQr = /@(ptys|paytm)\b/i.test(pa);
+
+  const params = isPaytmMerchantQr
+    ? { pa, pn, am, cu: 'INR' }
+    : { pa, pn, tr: ref, tn: ref, am, cu: 'INR' };
 
   // encodeURIComponent is correct (@ → %40, spaces → %20)
   const query = Object.entries(params)
