@@ -423,8 +423,7 @@ const QRModal = ({
             <div className="bg-white/90 rounded-2xl p-4 sm:p-6 border border-gray-200">
               <h4 className="text-base font-bold text-gray-900 mb-1">After you pay</h4>
               <p className="text-sm text-gray-600 mb-3">
-                Enter the UTR / transaction ID from your UPI app. Your order will be saved as{' '}
-                <strong>payment pending confirmation</strong> (not auto-marked paid).
+                Enter the UTR / transaction ID from your UPI app, then submit your order.
               </p>
               <input
                 type="text"
@@ -439,11 +438,11 @@ const QRModal = ({
                 disabled={!transactionId.trim()}
                 className={`w-full mt-3 min-h-[48px] rounded-xl font-semibold ${
                   transactionId.trim()
-                    ? 'bg-blue-700 text-white active:bg-blue-900'
+                    ? 'bg-green-600 text-white active:bg-green-800'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                I&apos;ve completed payment (pending verification)
+                Submit order
               </button>
             </div>
           )}

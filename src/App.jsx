@@ -534,8 +534,8 @@ function App() {
     });
 
     addNotification(
-      `Order submitted · payment pending confirmation. Ref: ${paymentRef}`,
-      'info',
+      `Order placed successfully. Ref: ${paymentRef}`,
+      'success',
     );
   };
 

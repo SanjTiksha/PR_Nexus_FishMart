@@ -135,11 +135,11 @@ Thank you for your order! 🐟`;
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">
-                {isPendingConfirmation ? 'Order Received' : 'Payment Successful!'}
+                {isPendingConfirmation ? 'Order Placed Successfully' : 'Payment Successful!'}
               </h2>
               <p className="text-sm text-gray-600">
                 {isPendingConfirmation
-                  ? 'Payment pending confirmation'
+                  ? 'Thank you — your order is recorded'
                   : 'Your order has been placed'}
               </p>
             </div>
@@ -159,16 +159,19 @@ Thank you for your order! 🐟`;
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
-            <h3 className={`text-2xl font-bold mb-2 ${isPendingConfirmation ? 'text-amber-600' : 'text-green-600'}`}>
-              {isPendingConfirmation ? 'Awaiting Payment Verification' : 'Transaction Complete!'}
+            <h3 className="text-2xl font-bold mb-2 text-green-600">
+              {isPendingConfirmation ? 'Thank You for Your Order!' : 'Transaction Complete!'}
             </h3>
             <p className="text-gray-600">
               {isPendingConfirmation
-                ? 'Thank you. We will confirm your UPI payment using the transaction ID you provided. Opening a UPI app alone does not mark the order as paid.'
+                ? 'Your order and UPI transaction ID have been submitted successfully. Our team will verify the payment and process delivery shortly. This is not a payment failure.'
                 : 'Thank you for your purchase. Your order is being processed.'}
             </p>
             {order.paymentRef && (
               <p className="text-xs text-gray-500 mt-2">Payment ref: {order.paymentRef}</p>
+            )}
+            {order.transactionId && (
+              <p className="text-xs text-gray-500 mt-1">UTR / Txn ID: {order.transactionId}</p>
             )}
           </div>
 

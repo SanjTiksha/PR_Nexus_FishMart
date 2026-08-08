@@ -17,7 +17,7 @@ export const formatUpiAmount = (value) => {
 
 /**
  * Build a standard UPI pay URI from a locked payment session.
- * Same URI shape for all merchants (including Paytm @ptys / @paytm).
+ * Same parameter structure for ALL merchants (including Paytm @ptys).
  * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
  */
 export const buildUpiPayment = ({
@@ -29,35 +29,50 @@ export const buildUpiPayment = ({
   const pa = String(merchantUpiId || '').trim();
   const pn = String(merchantName || 'PR Nexus FishMart').trim();
   const am = formatUpiAmount(amount);
-  const tn = String(paymentRef || createPaymentReference()).trim();
+  const ref = String(paymentRef || createPaymentReference()).trim();
 
+  // Keep { error } return shape for QRModal compatibility (do not throw)
   if (!pa || !pa.includes('@')) {
     return { error: 'Merchant UPI ID is missing or invalid.' };
   }
-  if (!am) {
-    return { error: 'Order amount is invalid.' };
+  if (!am || Number(am) <= 0) {
+    return { error: 'Invalid payment amount.' };
+  }
+  if (!ref) {
+    return { error: 'Payment reference is missing.' };
   }
 
-  // Standard UPI params for ALL merchants (including Paytm-style)
-  const params = { pa, pn, am, cu: 'INR', tn };
+  // Standard UPI params — same for all UPI IDs (tr + tn both use ref)
+  const params = {
+    pa,
+    pn,
+    tr: ref,
+    tn: ref,
+    am,
+    cu: 'INR',
+  };
 
-  // Values encoded with encodeURIComponent — @ becomes %40 (correct)
+  // encodeURIComponent is correct (@ → %40, spaces → %20)
   const query = Object.entries(params)
     .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
     .join('&');
 
   const upiUri = `upi://pay?${query}`;
 
-  // Kept for API compatibility only — launchUpiPayment must NOT use this as primary
-  const intentUri = `intent://pay?${query}#Intent;scheme=upi;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
-
   if (import.meta.env.DEV) {
-    console.log('[UPI] merchantUpiId:', merchantUpiId);
-    console.log('[UPI] upiUri:', upiUri);
+    console.log('[UPI] merchant:', pa);
+    console.log('[UPI] amount:', am);
+    console.log('[UPI] paymentRef:', ref);
     console.log('[UPI] params:', params);
+    console.log('[UPI] upiUri:', upiUri);
   }
 
-  return { upiUri, intentUri, params, amount: am, paymentRef: tn };
+  return {
+    upiUri,
+    params,
+    amount: am,
+    paymentRef: ref,
+  };
 };
 
 export const detectPaymentDevice = () => {
@@ -92,9 +107,9 @@ export const logPaymentAttempt = ({
     amount,
     merchantUpiId,
     cu: params?.cu,
+    tr: params?.tr,
     tn: params?.tn,
     pn: params?.pn,
-    // pa shown as configured merchant id (public)
     pa: merchantUpiId,
   });
 };
@@ -130,11 +145,11 @@ export const copyTextToClipboard = async (text) => {
 
 /**
  * Launch UPI app via standard upi:// URI only.
- * Does NOT use intent:// as the primary launch mechanism.
+ * Does NOT use intent:// as the primary (or any) launch mechanism.
  * Opening UPI is not payment confirmation.
- * Signature kept compatible: intentUri / isAndroid accepted but unused for launch.
+ * Signature kept compatible: intentUri accepted but unused.
  */
-export const launchUpiPayment = ({ upiUri, intentUri: _intentUri, isIOS, isAndroid: _isAndroid }) => {
+export const launchUpiPayment = ({ upiUri, intentUri: _intentUri, isIOS, isAndroid }) => {
   const fallbackMessage =
     'Unable to open your UPI app. You can copy the UPI ID or scan the QR code to complete payment.';
 
@@ -146,12 +161,22 @@ export const launchUpiPayment = ({ upiUri, intentUri: _intentUri, isIOS, isAndro
     };
   }
 
+  // Desktop: do not assume a UPI app exists — use QR / Copy UPI ID
+  if (!isIOS && !isAndroid) {
+    return {
+      launched: false,
+      method: 'desktop',
+      message:
+        'On desktop, please scan the QR code or copy the UPI ID to pay from your phone.',
+    };
+  }
+
   if (import.meta.env.DEV) {
     console.log('[UPI] launch upiUri:', upiUri);
   }
 
   try {
-    // Primary launch for Android, iOS, and desktop: navigate to standard upi:// URI
+    // Android + iPhone: navigate to standard upi:// URI (OS picks installed UPI app)
     window.location.href = upiUri;
 
     if (isIOS) {
