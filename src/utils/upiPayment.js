@@ -19,13 +19,16 @@ export const formatUpiAmount = (value) => {
 export const UPI_TRANSACTION_NOTE = 'Fish Mart Order';
 
 /**
- * Build NPCI-style UPI deep link for checkout.
+ * Build a Personal (P2P) UPI deep link for checkout.
+ *
+ * Omits merchant-only fields (mc, orgid, sign) so GPay treats this as a
+ * peer-to-peer transfer, not an unverified merchant intent.
  *
  * Encoding rules:
- * - pa: literal '@' (NOT %40) — required by some GPay merchant checks
+ * - pa: literal '@' (NOT %40)
  * - pn / tn: URL-encoded
- * - tr: unique per-checkout alphanumeric reference (not hardcoded)
- * - mc: 5411 (retail food / fish market)
+ * - tr: unique per-checkout alphanumeric reference
+ * - no mc / orgid / sign
  *
  * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
  */
@@ -40,11 +43,13 @@ export const buildUpiPayment = ({
   const am = formatUpiAmount(amount);
   const tr = String(paymentRef || createPaymentReference()).trim();
   const tn = UPI_TRANSACTION_NOTE;
-  // Retail food / fish sales MCC (hardcoded default 5411)
-  const mc = '5411';
 
   if (!pa || !pa.includes('@') || !/^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/.test(pa)) {
-    return { error: 'Merchant UPI ID is missing or invalid.' };
+    return { error: 'Payee UPI ID is missing or invalid.' };
+  }
+  // Reject Paytm merchant QR VPAs for this P2P flow
+  if (/^paytmqr/i.test(pa) || /@(ptys)\b/i.test(pa)) {
+    return { error: 'Use a personal UPI ID (e.g. name@okicici), not a merchant QR VPA.' };
   }
   if (!am || Number(am) <= 0) {
     return { error: 'Invalid payment amount.' };
@@ -53,28 +58,26 @@ export const buildUpiPayment = ({
     return { error: 'Payment reference is missing or invalid.' };
   }
 
+  // Personal P2P params only — never include mc / orgid / sign
   const params = {
-    pa, // stored raw for logging / QR payload metadata
+    pa,
     pn,
     tr,
     tn,
     am,
     cu: 'INR',
-    mc,
   };
 
-  // Selective encoding: keep literal '@' in pa; encode pn + tn
   const upiUri =
     `upi://pay?pa=${pa}` +
     `&pn=${encodeURIComponent(pn)}` +
-    `&mc=${mc}` +
     `&tr=${tr}` +
     `&tn=${encodeURIComponent(tn)}` +
     `&am=${am}` +
     `&cu=INR`;
 
   if (import.meta.env.DEV) {
-    console.log('[UPI] merchant:', pa);
+    console.log('[UPI] payee:', pa);
     console.log('[UPI] amount:', am);
     console.log('[UPI] paymentRef:', tr);
     console.log('[UPI] params:', params);

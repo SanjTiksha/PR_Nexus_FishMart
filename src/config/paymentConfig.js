@@ -9,10 +9,6 @@ export const PAYMENT_MERCHANT_NAME =
 
 export const PAYMENT_UPI_ID_ENV = import.meta.env.VITE_PAYMENT_UPI_ID || '';
 
-/** MCC — 5411 = Grocery Stores / Markets (fish market appropriate) */
-export const PAYMENT_MERCHANT_CATEGORY_CODE =
-  String(import.meta.env.VITE_PAYMENT_MCC || '5411').trim() || '5411';
-
 export const resolveMerchantUpiId = (shopInfo = {}) => {
   const fromEnv = String(PAYMENT_UPI_ID_ENV || '').trim();
   if (fromEnv) return fromEnv;
