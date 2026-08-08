@@ -5,6 +5,7 @@ import {
   buildUpiPayment,
   copyTextToClipboard,
   detectPaymentDevice,
+  launchGpayQrPayment,
   launchSpecificUpiApp,
   launchUpiPayment,
   logPaymentAttempt,
@@ -194,6 +195,36 @@ const QRModal = ({
     }
   };
 
+  const handlePayViaGpayQr = () => {
+    setLaunchError('');
+    setLaunchMessage('');
+
+    if (paymentBuild.error || !appLinks?.upi) {
+      setLaunchError(
+        paymentBuild.error ||
+          'Unable to open Google Pay. Scan the QR code or copy the UPI ID instead.',
+      );
+      return;
+    }
+
+    const result = launchGpayQrPayment({
+      appLinks,
+      isAndroid: device.isAndroid,
+      isIOS: device.isIOS,
+    });
+
+    if (!result.launched) {
+      setLaunchError(result.message);
+      return;
+    }
+
+    setLaunchMessage(
+      'Opening Google Pay with the same amount as the QR. Confirm ₹' +
+        amount +
+        ' and enter UPI PIN. Then come back and enter UTR below.',
+    );
+  };
+
   const handlePayWithApp = (app) => {
     setLaunchError('');
     setLaunchMessage('');
@@ -214,8 +245,13 @@ const QRModal = ({
       return;
     }
 
+    // GPay: open with QR payload via package-pinned Android intent
+    if (app.id === 'gpay') {
+      handlePayViaGpayQr();
+      return;
+    }
+
     const primaryUrl = appLinks[app.linkKey] || appLinks.upi;
-    // Only chain a second scheme when the app defines one (e.g. GPay → tez)
     const fallbackUrl = app.fallbackKey ? appLinks[app.fallbackKey] : null;
 
     const result = launchSpecificUpiApp({ primaryUrl, fallbackUrl });
@@ -307,13 +343,25 @@ const QRModal = ({
             </div>
           )}
 
-          {/* MOBILE: choose UPI app → Copy → QR → Instructions */}
+          {/* MOBILE: GPay QR link → apps → Copy → QR → Instructions */}
           {isMobile && (
             <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handlePayViaGpayQr}
+                disabled={!!paymentBuild.error}
+                className="w-full min-h-[56px] rounded-xl bg-[#1a73e8] text-white text-base font-bold active:opacity-90 disabled:bg-gray-300"
+              >
+                Pay ₹{amount} via QR in Google Pay
+              </button>
+              <p className="text-[11px] text-center text-gray-500 -mt-1">
+                Opens GPay with the same payment as the QR — confirm with UPI PIN
+              </p>
+
               <div className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4">
-                <h4 className="text-sm font-bold text-gray-900 mb-1">Choose payment app</h4>
+                <h4 className="text-sm font-bold text-gray-900 mb-1">Or choose another app</h4>
                 <p className="text-xs text-gray-500 mb-3">
-                  Tap the app you use — GPay, PhonePe, Paytm, BHIM, or WhatsApp Pay
+                  PhonePe, Paytm, BHIM, WhatsApp Pay, or Other UPI
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {UPI_PAYMENT_APPS.map((app) => (
@@ -351,7 +399,7 @@ const QRModal = ({
               <div className="bg-white rounded-2xl border border-blue-200 p-4 text-center">
                 <h4 className="text-sm font-bold text-gray-900 mb-1">Scan QR Code</h4>
                 <p className="text-xs text-gray-500 mb-3">
-                  Open any UPI app → Scan QR → confirm ₹{amount}
+                  Or tap below to open this QR payment in Google Pay (no scan)
                 </p>
                 {upiUri ? (
                   <div className="inline-block bg-white p-2 rounded-xl border border-gray-100">
@@ -369,9 +417,17 @@ const QRModal = ({
                 <p className="font-mono text-xs text-gray-700 mt-3 break-all">{merchantUpiId}</p>
                 <button
                   type="button"
+                  onClick={handlePayViaGpayQr}
+                  disabled={!!paymentBuild.error || !upiUri}
+                  className="w-full mt-3 min-h-[48px] rounded-xl bg-[#1a73e8] text-white text-sm font-bold active:opacity-90 disabled:opacity-50"
+                >
+                  Open this QR payment in Google Pay
+                </button>
+                <button
+                  type="button"
                   onClick={handleSaveQrToGallery}
                   disabled={!upiUri}
-                  className={`w-full mt-3 min-h-[44px] rounded-xl text-sm font-semibold disabled:opacity-50 ${
+                  className={`w-full mt-2 min-h-[44px] rounded-xl text-sm font-semibold disabled:opacity-50 ${
                     qrSaved
                       ? 'bg-emerald-600 text-white'
                       : 'bg-gray-900 text-white active:bg-black'
@@ -406,7 +462,9 @@ const QRModal = ({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div className="bg-white rounded-2xl border-2 border-blue-200 p-5 text-center shadow-sm">
                 <h4 className="text-lg font-bold text-gray-900 mb-1">Scan QR Code</h4>
-                <p className="text-sm text-gray-500 mb-4">Use any UPI app to scan</p>
+                <p className="text-sm text-gray-500 mb-4">
+                  Scan with GPay on phone, or open the QR payment link on Android
+                </p>
                 {upiUri ? (
                   <div className="inline-block bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-xl">
                     <QRCodeCanvas
@@ -423,9 +481,17 @@ const QRModal = ({
                 <p className="text-xs text-gray-500 mt-3">Amount: ₹{amount}</p>
                 <button
                   type="button"
+                  onClick={handlePayViaGpayQr}
+                  disabled={!!paymentBuild.error || !upiUri}
+                  className="w-full mt-3 min-h-[48px] rounded-xl bg-[#1a73e8] text-white text-sm font-bold hover:opacity-90 disabled:opacity-50"
+                >
+                  Pay ₹{amount} via QR in Google Pay
+                </button>
+                <button
+                  type="button"
                   onClick={handleSaveQrToGallery}
                   disabled={!upiUri}
-                  className={`w-full mt-3 min-h-[44px] rounded-xl text-sm font-semibold disabled:opacity-50 ${
+                  className={`w-full mt-2 min-h-[44px] rounded-xl text-sm font-semibold disabled:opacity-50 ${
                     qrSaved
                       ? 'bg-emerald-600 text-white'
                       : 'bg-gray-900 text-white hover:bg-black'

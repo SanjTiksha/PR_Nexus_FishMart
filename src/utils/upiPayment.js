@@ -16,9 +16,14 @@ export const formatUpiAmount = (value) => {
   return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(2)));
 };
 
+/** Google Pay Android package — used to open GPay directly (same payload as QR). */
+export const GPAY_ANDROID_PACKAGE = 'com.google.android.apps.nbu.paisa.user';
+
 /**
  * App-specific UPI deep links so the user can open GPay / PhonePe / Paytm / BHIM directly.
  * WhatsApp Pay usually has no stable private scheme — falls back to generic upi://.
+ *
+ * gpayIntent = Android intent pinned to GPay with the SAME query string as the QR code.
  */
 export const buildUpiAppLinks = (params = {}) => {
   const pa = String(params.pa || '').trim();
@@ -49,8 +54,14 @@ export const buildUpiAppLinks = (params = {}) => {
 
   const upiUri = `upi://pay?${upiQuery}`;
 
+  // Same payment data as QR — opens Google Pay directly on Android (no scan needed)
+  const gpayIntent =
+    `intent://pay?${upiQuery}` +
+    `#Intent;scheme=upi;package=${GPAY_ANDROID_PACKAGE};end`;
+
   return {
     upi: upiUri,
+    gpayIntent,
     gpay: `gpay://upi/pay?${encodedQuery}`,
     tez: `tez://upi/pay?${encodedQuery}`,
     phonepe: `phonepe://pay?${encodedQuery}`,
@@ -129,7 +140,14 @@ export const buildUpiPayment = ({
 
 /** Payment apps shown on the checkout page (user picks one). */
 export const UPI_PAYMENT_APPS = [
-  { id: 'gpay', label: 'Google Pay', color: 'bg-[#1a73e8]', linkKey: 'gpay', fallbackKey: 'tez' },
+  {
+    id: 'gpay',
+    label: 'Google Pay',
+    color: 'bg-[#1a73e8]',
+    // Android: package-pinned intent (same data as QR). iOS/others: gpay:// then tez
+    linkKey: 'gpayIntent',
+    fallbackKey: 'gpay',
+  },
   { id: 'phonepe', label: 'PhonePe', color: 'bg-[#5f259f]', linkKey: 'phonepe' },
   { id: 'paytm', label: 'Paytm', color: 'bg-[#00baf2]', linkKey: 'paytm' },
   { id: 'bhim', label: 'BHIM', color: 'bg-[#00afd5]', linkKey: 'bhim' },
@@ -137,11 +155,20 @@ export const UPI_PAYMENT_APPS = [
   { id: 'upi', label: 'Other UPI', color: 'bg-gray-800', linkKey: 'upi' },
 ];
 
+const tryOpenUrl = (url) => {
+  if (!url) return;
+  try {
+    window.location.href = url;
+  } catch {
+    /* ignore */
+  }
+};
+
 /**
  * Open a specific UPI app link. Falls back to generic upi:// if needed.
  * Opening an app is NOT payment confirmation.
  */
-export const launchSpecificUpiApp = ({ primaryUrl, fallbackUrl }) => {
+export const launchSpecificUpiApp = ({ primaryUrl, fallbackUrl, extraFallbacks = [] }) => {
   const fallbackMessage =
     'Unable to open that UPI app. Try another app, copy the UPI ID, or scan the QR code.';
 
@@ -149,30 +176,61 @@ export const launchSpecificUpiApp = ({ primaryUrl, fallbackUrl }) => {
     return { launched: false, message: fallbackMessage };
   }
 
-  try {
-    window.location.href = primaryUrl;
+  const chain = [primaryUrl, fallbackUrl, ...extraFallbacks].filter(
+    (url, i, arr) => url && arr.indexOf(url) === i,
+  );
 
-    // Only try alt scheme if page is still focused (app likely did not open)
-    if (fallbackUrl && fallbackUrl !== primaryUrl) {
+  try {
+    tryOpenUrl(chain[0]);
+
+    // If page stays visible, app likely did not open — try next schemes
+    chain.slice(1).forEach((url, index) => {
       setTimeout(() => {
         if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          try {
-            window.location.href = fallbackUrl;
-          } catch {
-            /* ignore */
-          }
+          tryOpenUrl(url);
         }
-      }, 1200);
-    }
+      }, 1100 * (index + 1));
+    });
 
     return {
       launched: true,
       message:
-        'UPI app opening. Complete payment there. If it fails, use Copy UPI ID or Scan QR — those work even when deep links fail.',
+        'Google Pay / UPI opening with your order amount (same as QR). Enter UPI PIN to finish, then enter UTR here.',
     };
   } catch {
     return { launched: false, message: fallbackMessage };
   }
+};
+
+/**
+ * Open Google Pay with the exact same payment payload encoded in the QR.
+ * Android uses package-pinned intent:// so GPay opens directly (no scan).
+ * User must still confirm with UPI PIN — this site cannot auto-complete payment.
+ */
+export const launchGpayQrPayment = ({ appLinks, isAndroid, isIOS }) => {
+  if (!appLinks?.upi) {
+    return {
+      launched: false,
+      message: 'Payment link unavailable. Scan the QR code or copy the UPI ID.',
+    };
+  }
+
+  if (!isAndroid && !isIOS) {
+    return {
+      launched: false,
+      message: 'On desktop, scan the QR with Google Pay on your phone.',
+    };
+  }
+
+  const primaryUrl = isAndroid
+    ? appLinks.gpayIntent || appLinks.gpay || appLinks.upi
+    : appLinks.gpay || appLinks.upi;
+
+  return launchSpecificUpiApp({
+    primaryUrl,
+    fallbackUrl: isAndroid ? appLinks.gpay : appLinks.upi,
+    extraFallbacks: isAndroid ? [appLinks.tez, appLinks.upi] : [appLinks.upi],
+  });
 };
 
 export const detectPaymentDevice = () => {
