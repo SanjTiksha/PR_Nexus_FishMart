@@ -14,23 +14,34 @@ const QRModal = ({
   const [transactionId, setTransactionId] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   const upiId = shopInfo.upiId;
+  const payeeName = shopInfo.name || 'PR Nexus FishMart';
   
   // For checkout flow, use cart total; for single fish, use fish rate
-  const amount = isCheckoutFlow ? totalPrice : fish.rate;
-  const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(shopInfo.name)}&cu=INR&am=${amount}`;
+  const rawAmount = isCheckoutFlow ? totalPrice : fish.rate;
+  const amount = Number(rawAmount || 0).toFixed(2);
+  // Standard UPI intent — when scanned inside PhonePe / GPay, opens pay screen with amount
+  const upiParams = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(`Order ${payeeName}`)}`;
+  const upiLink = `upi://pay?${upiParams}`;
+  const gpayLink = `gpay://upi/pay?${upiParams}`;
+  const phonePeLink = `phonepe://pay?${upiParams}`;
+  const paytmLink = `paytmmp://pay?${upiParams}`;
 
-  // Detect mobile device
+  // Detect mobile / iOS (Safari cannot open Android-style UPI deep links reliably)
   useEffect(() => {
-    const checkMobile = () => {
-      const isMobileDevice = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const checkDevice = () => {
+      const ua = navigator.userAgent || '';
+      const ios = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isMobileDevice = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      setIsIOS(ios);
       setIsMobile(isMobileDevice);
     };
     
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
   }, []);
 
   const copyUPI = async () => {
@@ -56,30 +67,46 @@ const QRModal = ({
     }
   };
 
+  const openAppLink = (url) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const openUPI = () => {
-    const upiAppLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(shopInfo.name)}&cu=INR&am=${amount}`;
-    
-    // Try to open UPI app
+    // iPhone Safari / iOS UPI deep links usually fail with "Something went wrong"
+    if (isIOS) {
+      alert(
+        `On iPhone:\n\n1. Open PhonePe or Google Pay\n2. Tap Scan QR\n3. Scan this screen's QR\n\nOr Copy UPI ID and pay ₹${amount} to ${upiId}`
+      );
+      return;
+    }
+
     try {
-      // Create a hidden anchor element to trigger the deep link
-      const link = document.createElement('a');
-      link.href = upiAppLink;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // If deep link fails, show fallback after a short delay
-      setTimeout(() => {
-        // If we're still here, the deep link might have failed
-        // Show QR code or manual entry as fallback
-        console.log('UPI deep link opened (or fallback needed)');
-      }, 500);
+      openAppLink(upiLink);
     } catch (error) {
       console.error('Error opening UPI app:', error);
-      // Fallback: Show alert with instructions
       alert(`Please open your UPI app manually and use:\nUPI ID: ${upiId}\nAmount: ₹${amount}`);
     }
+  };
+
+  const openPhonePe = () => {
+    openAppLink(phonePeLink);
+    // Fallback to generic UPI after a moment if app not installed
+    setTimeout(() => openAppLink(upiLink), 1200);
+  };
+
+  const openGPay = () => {
+    openAppLink(gpayLink);
+    setTimeout(() => openAppLink(upiLink), 1200);
+  };
+
+  const openPaytm = () => {
+    openAppLink(paytmLink);
+    setTimeout(() => openAppLink(upiLink), 1200);
   };
 
   const handlePaymentDone = () => {
@@ -195,44 +222,63 @@ const QRModal = ({
               </div>
             )}
 
-            {/* Mobile: Prominent UPI Pay Button */}
+            {/* Mobile: large UPI QR (scan in PhonePe/GPay) + app buttons */}
             {isMobile && (
-              <div className="lg:w-1/3 flex flex-col items-center">
-                <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-8 w-full text-center shadow-xl border-2 border-green-400">
-                  <div className="mb-6">
-                    <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <span className="text-4xl">💳</span>
-                    </div>
-                    <h4 className="text-2xl font-bold text-white mb-2">Pay via UPI App</h4>
-                    <p className="text-green-100 text-sm">One-tap payment</p>
-                  </div>
-                  <button
-                    onClick={openUPI}
-                    className="w-full bg-white text-green-600 py-4 px-6 rounded-xl font-bold text-lg shadow-lg hover:bg-green-50 transition-all duration-300 transform hover:scale-105 mb-4"
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-xl">📱</span>
-                      <span>Pay ₹{amount}</span>
-                    </div>
-                  </button>
-                  <p className="text-xs text-green-100">
-                    Opens Google Pay, PhonePe, Paytm, or any UPI app
+              <div className="lg:w-1/3 flex flex-col items-center w-full">
+                <div className="bg-white rounded-2xl p-5 w-full text-center shadow-xl border border-blue-200">
+                  <h4 className="text-lg font-bold text-gray-900 mb-1">Scan QR to Pay</h4>
+                  <p className="text-xs text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-3">
+                    Open <strong>PhonePe</strong> or <strong>Google Pay</strong> → tap <strong>Scan QR</strong> → point at this code
                   </p>
-                </div>
-                
-                {/* Small QR Code for sharing/fallback on mobile */}
-                <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-md">
-                  <p className="text-xs text-gray-500 text-center mb-2">Or scan QR on another device</p>
-                  <div className="bg-white p-2 rounded-lg">
+                  {isIOS && (
+                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-3">
+                      iPhone: use Scan inside PhonePe/GPay (Safari camera may not open payment).
+                    </p>
+                  )}
+                  <div className="bg-white p-3 rounded-xl border-2 border-blue-200 inline-block mb-2 shadow-sm">
                     <QRCodeCanvas
                       value={upiLink}
-                      size={120}
+                      size={220}
                       className="mx-auto"
                       level="M"
                       includeMargin={true}
                     />
                   </div>
-                  <p className="text-xs text-gray-400 text-center mt-2">Amount: ₹{amount}</p>
+                  <p className="text-base font-bold text-gray-900">₹{amount}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 mb-3">PhonePe • Google Pay • any UPI app</p>
+
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={openPhonePe}
+                      className="min-h-[48px] rounded-xl bg-[#5f259f] text-white text-sm font-bold active:opacity-90"
+                    >
+                      Open PhonePe
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openGPay}
+                      className="min-h-[48px] rounded-xl bg-[#1a73e8] text-white text-sm font-bold active:opacity-90"
+                    >
+                      Open GPay
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={isIOS ? copyUPI : openUPI}
+                    className="w-full min-h-[44px] rounded-xl border-2 border-gray-200 text-gray-700 text-sm font-semibold active:bg-gray-50 mb-2"
+                  >
+                    {isIOS ? (copied ? 'UPI ID Copied!' : 'Copy UPI ID') : `Pay ₹${amount} (Any UPI)`}
+                  </button>
+                  {isIOS && (
+                    <button
+                      type="button"
+                      onClick={openPaytm}
+                      className="w-full min-h-[40px] rounded-xl text-xs font-medium text-gray-500"
+                    >
+                      Try Paytm
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -259,7 +305,9 @@ const QRModal = ({
                   </p>
                   {isMobile && (
                     <p className="text-xs text-purple-600 mt-3 p-2 bg-purple-50 rounded border border-purple-200">
-                      💡 Copy UPI ID → Open your UPI app → Paste → Enter ₹{amount} → Pay
+                      {isIOS
+                        ? '💡 iPhone: Copy UPI ID → open PhonePe/GPay → pay manually'
+                        : `💡 Copy UPI ID → Open your UPI app → Paste → Enter ₹${amount} → Pay`}
                     </p>
                   )}
                 </div>
