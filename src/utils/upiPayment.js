@@ -28,7 +28,7 @@ export const buildUpiPayment = ({
   const pa = String(merchantUpiId || '').trim();
   const pn = String(merchantName || 'PR Nexus FishMart').trim();
   const am = formatUpiAmount(amount);
-  const tn = String(paymentRef || createPaymentReference()).trim();
+  const ref = String(paymentRef || createPaymentReference()).trim();
 
   if (!pa || !pa.includes('@')) {
     return { error: 'Merchant UPI ID is missing or invalid.' };
@@ -37,7 +37,15 @@ export const buildUpiPayment = ({
     return { error: 'Order amount is invalid.' };
   }
 
-  const params = { pa, pn, am, cu: 'INR', tn };
+  // Paytm QR / merchant VPA (@ptys, @paytm) often reject UPI "tn" (description)
+  // and show "Can't add description". Keep paymentRef only in our app/order.
+  const isPaytmStyleMerchant = /@(ptys|paytm)\b/i.test(pa);
+
+  // URI params sent to UPI apps / QR (no tn for Paytm-style merchants)
+  const params = isPaytmStyleMerchant
+    ? { pa, pn, am, cu: 'INR' }
+    : { pa, pn, am, cu: 'INR', tn: ref };
+
   const query = Object.entries(params)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&');
@@ -47,7 +55,7 @@ export const buildUpiPayment = ({
   // Android Chrome app-chooser intent (lets user pick any installed UPI app)
   const intentUri = `intent://pay?${query}#Intent;scheme=upi;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end`;
 
-  return { upiUri, intentUri, params, amount: am, paymentRef: tn };
+  return { upiUri, intentUri, params, amount: am, paymentRef: ref };
 };
 
 export const detectPaymentDevice = () => {

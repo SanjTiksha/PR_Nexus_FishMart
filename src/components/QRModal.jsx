@@ -320,7 +320,7 @@ const QRModal = ({
                   {qrSaved ? 'QR ready to save' : 'Save QR to Gallery'}
                 </button>
                 <p className="text-[11px] text-gray-500 mt-2">
-                  Save QR → open PhonePe / GPay → Scan from gallery / photos
+                  Save QR → open Paytm / PhonePe / GPay → Scan from gallery / photos
                 </p>
               </div>
 
@@ -328,7 +328,7 @@ const QRModal = ({
                 <p className="font-semibold">Payment instructions</p>
                 {isIOS ? (
                   <>
-                    <p>1. Prefer Copy UPI ID or Scan QR inside PhonePe / Google Pay.</p>
+                    <p>1. Prefer Copy UPI ID or Scan QR inside Paytm / PhonePe / Google Pay.</p>
                     <p>2. Safari often cannot open UPI apps reliably.</p>
                   </>
                 ) : (
