@@ -3,6 +3,8 @@
  * Builds NPCI-style upi://pay URIs and device detection for Android / iOS / desktop.
  */
 
+import { PAYMENT_MERCHANT_CATEGORY_CODE } from '../config/paymentConfig';
+
 export const createPaymentReference = () => {
   const stamp = Date.now().toString(36).toUpperCase();
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -17,7 +19,7 @@ export const formatUpiAmount = (value) => {
 
 /**
  * Build a standard UPI pay URI from a locked payment session.
- * Same parameter structure for ALL merchants (including Paytm @ptys).
+ * Includes MCC (mc) so GPay merchant-intent checks have category metadata.
  * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
  */
 export const buildUpiPayment = ({
@@ -30,6 +32,7 @@ export const buildUpiPayment = ({
   const pn = String(merchantName || 'PR Nexus FishMart').trim();
   const am = formatUpiAmount(amount);
   const ref = String(paymentRef || createPaymentReference()).trim();
+  const mc = String(PAYMENT_MERCHANT_CATEGORY_CODE || '5411').trim() || '5411';
 
   // Keep { error } return shape for QRModal compatibility (do not throw)
   if (!pa || !pa.includes('@')) {
@@ -47,9 +50,10 @@ export const buildUpiPayment = ({
   // Paste-only works because no tn/tr is sent. Keep ref in our app only.
   const isPaytmMerchantQr = /@(ptys|paytm)\b/i.test(pa);
 
+  // mc=5411 = Grocery Stores / Markets (fish market)
   const params = isPaytmMerchantQr
-    ? { pa, pn, am, cu: 'INR' }
-    : { pa, pn, tr: ref, tn: ref, am, cu: 'INR' };
+    ? { pa, pn, am, cu: 'INR', mc }
+    : { pa, pn, tr: ref, tn: ref, am, cu: 'INR', mc };
 
   // encodeURIComponent is correct (@ → %40, spaces → %20)
   const query = Object.entries(params)
