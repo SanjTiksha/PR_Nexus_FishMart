@@ -195,7 +195,7 @@ const QRModal = ({
     }
   };
 
-  const handlePayViaGpayQr = () => {
+  const handlePayViaGpayQr = async () => {
     setLaunchError('');
     setLaunchMessage('');
 
@@ -206,6 +206,10 @@ const QRModal = ({
       );
       return;
     }
+
+    // Always copy UPI ID first — if GPay rejects the deep link, paste in Send money works
+    const copiedOk = await copyTextToClipboard(merchantUpiId);
+    if (copiedOk) setCopied(true);
 
     const result = launchGpayQrPayment({
       appLinks,
@@ -219,9 +223,9 @@ const QRModal = ({
     }
 
     setLaunchMessage(
-      'Opening Google Pay with the same amount as the QR. Confirm ₹' +
-        amount +
-        ' and enter UPI PIN. Then come back and enter UTR below.',
+      copiedOk
+        ? `UPI ID copied · Opening GPay for ₹${amount}. If GPay shows an error: New payment → paste UPI ID → enter ₹${amount} → Pay.`
+        : `Opening GPay for ₹${amount}. If it fails: Copy UPI ID → GPay Send money → Pay ₹${amount}.`,
     );
   };
 
@@ -352,10 +356,10 @@ const QRModal = ({
                 disabled={!!paymentBuild.error}
                 className="w-full min-h-[56px] rounded-xl bg-[#1a73e8] text-white text-base font-bold active:opacity-90 disabled:bg-gray-300"
               >
-                Pay ₹{amount} via QR in Google Pay
+                Pay ₹{amount} in Google Pay
               </button>
               <p className="text-[11px] text-center text-gray-500 -mt-1">
-                Opens GPay with the same payment as the QR — confirm with UPI PIN
+                Copies UPI ID + opens GPay (payee + amount only). If it errors, paste UPI in Send money.
               </p>
 
               <div className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4">
@@ -441,18 +445,24 @@ const QRModal = ({
               </div>
 
               <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-3 text-xs text-amber-900 space-y-1.5">
-                <p className="font-semibold">If payment fails after the app opens</p>
+                <p className="font-semibold">Why GPay opens but payment fails</p>
                 <p>
-                  1. Deep links often fail on personal UPI IDs (bank / GPay blocks auto-filled
-                  merchant-style payments). Copy UPI ID or Scan QR usually works.
+                  Our shop uses a <strong>personal UPI ID</strong>. GPay often rejects website
+                  deep links for personal IDs, even when the ID is correct. Opening the app ≠
+                  payment done.
                 </p>
-                <p>2. Opening GPay/PhonePe is not payment success — confirm ₹{amount} in the app.</p>
-                {isIOS ? (
-                  <p>3. On iPhone, prefer Copy UPI ID or Scan QR (Safari deep links are unreliable).</p>
-                ) : (
-                  <p>3. If one app rejects, try another button, or Copy UPI ID and paste Send money.</p>
-                )}
-                <p>4. After you pay, enter UTR below so we can confirm the order.</p>
+                <p>
+                  <strong>Reliable method:</strong> Copy UPI ID → GPay → New payment / Send money
+                  → paste → pay ₹{amount}.
+                </p>
+                <p>
+                  Or scan the QR <strong>inside</strong> GPay (not only phone camera).
+                </p>
+                <p>
+                  If you see &quot;bank limit&quot; — that is your bank, not this website. Try
+                  another bank account linked in GPay.
+                </p>
+                <p>After you pay, enter UTR below.</p>
               </div>
             </div>
           )}
@@ -540,12 +550,12 @@ const QRModal = ({
                 </button>
 
                 <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-3 text-xs text-amber-900 space-y-1">
-                  <p className="font-semibold">If payment fails after the app opens</p>
+                  <p className="font-semibold">Why GPay may open but not pay</p>
                   <p>
-                    Personal UPI deep links are often blocked inside GPay/PhonePe. Scan QR or Copy
-                    UPI ID + Send money usually works.
+                    Personal UPI IDs often reject website deep links. Reliable: Copy UPI ID or
+                    scan QR inside GPay, then pay ₹{amount}.
                   </p>
-                  <p>Opening an app is not payment confirmation — enter UTR after you pay.</p>
+                  <p>Enter UTR here after payment succeeds.</p>
                 </div>
               </div>
             </div>

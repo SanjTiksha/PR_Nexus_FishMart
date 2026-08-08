@@ -12,76 +12,58 @@ export const createPaymentReference = () => {
 export const formatUpiAmount = (value) => {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return null;
-  // Prefer compact amount (5 not 5.00) when whole; keep decimals when needed
-  return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(2)));
+  // Always 2 decimals (5.00) — banks/GPay accept this more reliably than bare "5"
+  return num.toFixed(2);
 };
 
-/** Google Pay Android package — used to open GPay directly (same payload as QR). */
+/** Google Pay Android package — used to open GPay directly. */
 export const GPAY_ANDROID_PACKAGE = 'com.google.android.apps.nbu.paisa.user';
 
 /**
- * App-specific UPI deep links so the user can open GPay / PhonePe / Paytm / BHIM directly.
- * WhatsApp Pay usually has no stable private scheme — falls back to generic upi://.
+ * Personal P2P links for GPay / PhonePe / Paytm / BHIM.
  *
- * gpayIntent = Android intent pinned to GPay with the SAME query string as the QR code.
+ * WHY GPay "opens but fails":
+ * Personal UPI IDs (name@okicici, mobile@ybl) are P2P. When the link includes
+ * merchant-style fields (pn, tr, tn, mc, cu), GPay often rejects with
+ * "Invalid UPI" / description errors even though Copy+Send money works.
+ *
+ * FIX: GPay / QR use ONLY pa + am (true P2P). Order ref stays on our page, not in the UPI link.
  */
 export const buildUpiAppLinks = (params = {}) => {
   const pa = String(params.pa || '').trim();
-  const pn = String(params.pn || 'PR Nexus FishMart').trim();
   const am = String(params.am || '').trim();
-  const tr = String(params.tr || '').trim();
 
-  // App schemes often accept fully encoded query values (including pa @ → %40)
-  const encodedQuery = [
-    `pa=${encodeURIComponent(pa)}`,
-    `pn=${encodeURIComponent(pn)}`,
-    `am=${encodeURIComponent(am)}`,
-    tr ? `tr=${encodeURIComponent(tr)}` : null,
-    'cu=INR',
-  ]
-    .filter(Boolean)
-    .join('&');
+  // Minimal P2P query — literal @ in pa (matches successful manual Send money)
+  const p2pQuery = `pa=${pa}&am=${am}`;
+  const upiUri = `upi://pay?${p2pQuery}`;
 
-  // Generic upi:// keeps literal @ in pa (matches our QR / Pay via UPI format)
-  const upiQuery = [
-    `pa=${pa}`,
-    `pn=${encodeURIComponent(pn)}`,
-    tr ? `tr=${tr}` : null,
-    `am=${am}`,
-  ]
-    .filter(Boolean)
-    .join('&');
+  // Encoded pa for some custom schemes
+  const encodedP2p = `pa=${encodeURIComponent(pa)}&am=${encodeURIComponent(am)}`;
 
-  const upiUri = `upi://pay?${upiQuery}`;
-
-  // Same payment data as QR — opens Google Pay directly on Android (no scan needed)
+  // Android: open GPay package with the same minimal P2P payload
   const gpayIntent =
-    `intent://pay?${upiQuery}` +
+    `intent://pay?${p2pQuery}` +
     `#Intent;scheme=upi;package=${GPAY_ANDROID_PACKAGE};end`;
 
   return {
     upi: upiUri,
     gpayIntent,
-    gpay: `gpay://upi/pay?${encodedQuery}`,
-    tez: `tez://upi/pay?${encodedQuery}`,
-    phonepe: `phonepe://pay?${encodedQuery}`,
-    paytm: `paytmmp://pay?${encodedQuery}`,
-    bhim: `bhim://upi/pay?${encodedQuery}`,
-    // No reliable WhatsApp-Pay-only scheme; use UPI intent so WhatsApp can appear in chooser
+    gpay: `gpay://upi/pay?${encodedP2p}`,
+    tez: `tez://upi/pay?${encodedP2p}`,
+    phonepe: `phonepe://pay?${encodedP2p}`,
+    paytm: `paytmmp://pay?${encodedP2p}`,
+    bhim: `bhim://upi/pay?${encodedP2p}`,
     whatsapp: upiUri,
   };
 };
 
 /**
- * Build a Personal (P2P) UPI deep link for checkout.
+ * Build a Personal (P2P) UPI payment for checkout.
  *
- * Format: upi://pay?pa=...&pn=...&tr=...&am=...
- * Omits tn, cu, mc, orgid, sign (GPay P2P-friendly).
+ * UPI / QR / GPay link: upi://pay?pa=...&am=...
+ * (no pn/tr/tn/cu/mc — those break GPay on personal VPAs)
  *
- * - pa: literal '@' (NOT %40)
- * - pn: URL-encoded
- * - tr: unique per-checkout reference
- * - am: dynamic order amount
+ * paymentRef is kept for our order tracking only (shown on screen + UTR claim).
  *
  * @returns {{ upiUri: string, params: Record<string,string>, appLinks: object, amount: string, paymentRef: string } | { error: string }}
  */
@@ -110,21 +92,17 @@ export const buildUpiPayment = ({
     return { error: 'Payment reference is missing or invalid.' };
   }
 
+  // params kept for logging / UI; UPI wire format is pa+am only
   const params = { pa, pn, tr, am };
 
-  const upiUri =
-    `upi://pay?pa=${pa}` +
-    `&pn=${encodeURIComponent(pn)}` +
-    `&tr=${tr}` +
-    `&am=${am}`;
-
+  const upiUri = `upi://pay?pa=${pa}&am=${am}`;
   const appLinks = buildUpiAppLinks(params);
 
   if (import.meta.env.DEV) {
+    console.log('[UPI] mode: personal P2P (pa+am only)');
     console.log('[UPI] payee:', pa);
     console.log('[UPI] amount:', am);
-    console.log('[UPI] paymentRef:', tr);
-    console.log('[UPI] params:', params);
+    console.log('[UPI] paymentRef (not in UPI link):', tr);
     console.log('[UPI] upiUri:', upiUri);
     console.log('[UPI] appLinks:', appLinks);
   }
@@ -195,7 +173,7 @@ export const launchSpecificUpiApp = ({ primaryUrl, fallbackUrl, extraFallbacks =
     return {
       launched: true,
       message:
-        'Google Pay / UPI opening with your order amount (same as QR). Enter UPI PIN to finish, then enter UTR here.',
+        'UPI app opening (P2P: payee + amount only). Confirm with UPI PIN, then enter UTR here.',
     };
   } catch {
     return { launched: false, message: fallbackMessage };
@@ -203,9 +181,8 @@ export const launchSpecificUpiApp = ({ primaryUrl, fallbackUrl, extraFallbacks =
 };
 
 /**
- * Open Google Pay with the exact same payment payload encoded in the QR.
- * Android uses package-pinned intent:// so GPay opens directly (no scan).
- * User must still confirm with UPI PIN — this site cannot auto-complete payment.
+ * Open Google Pay with minimal P2P payload (pa + am) — same as QR.
+ * Also expects caller to copy UPI ID so user can paste if GPay still rejects the link.
  */
 export const launchGpayQrPayment = ({ appLinks, isAndroid, isIOS }) => {
   if (!appLinks?.upi) {
@@ -222,14 +199,15 @@ export const launchGpayQrPayment = ({ appLinks, isAndroid, isIOS }) => {
     };
   }
 
+  // Prefer minimal upi:// into GPay package (most P2P-friendly). Then gpay:// / tez.
   const primaryUrl = isAndroid
-    ? appLinks.gpayIntent || appLinks.gpay || appLinks.upi
-    : appLinks.gpay || appLinks.upi;
+    ? appLinks.gpayIntent || appLinks.upi
+    : appLinks.upi;
 
   return launchSpecificUpiApp({
     primaryUrl,
-    fallbackUrl: isAndroid ? appLinks.gpay : appLinks.upi,
-    extraFallbacks: isAndroid ? [appLinks.tez, appLinks.upi] : [appLinks.upi],
+    fallbackUrl: isAndroid ? appLinks.gpay : appLinks.gpay,
+    extraFallbacks: isAndroid ? [appLinks.tez, appLinks.upi] : [appLinks.gpay],
   });
 };
 
