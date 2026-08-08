@@ -83,7 +83,11 @@ const QRModal = ({
     }
   };
 
-  /** Direct download — no share sheet / no confirm dialog */
+  /**
+   * Save QR into Photos/Gallery.
+   * Websites cannot write silently to the gallery — on phone we use the system
+   * share sheet so the user can tap "Save Image" / "Photos" (one OS tap, no site confirm).
+   */
   const handleSaveQrToGallery = async () => {
     setLaunchError('');
     setLaunchMessage('');
@@ -96,16 +100,46 @@ const QRModal = ({
 
     const fileName = `PRNexus-UPI-${paymentRef || 'pay'}.png`;
 
+    let blob;
     try {
-      const blob = await new Promise((resolve) => {
+      blob = await new Promise((resolve) => {
         canvas.toBlob((b) => resolve(b), 'image/png');
       });
+    } catch {
+      setLaunchError('Could not create QR image. Please try again.');
+      return;
+    }
 
-      if (!blob) {
-        setLaunchError('Could not save QR code. Please try again.');
-        return;
+    if (!blob) {
+      setLaunchError('Could not save QR code. Please try again.');
+      return;
+    }
+
+    const file = new File([blob], fileName, { type: 'image/png' });
+    const isPhone = device.isMobile || device.isIOS || device.isAndroid;
+
+    // Phone: share sheet → Save Image / Photos / Gallery (real gallery path)
+    if (isPhone && typeof navigator.share === 'function') {
+      try {
+        const shareData = { files: [file], title: 'UPI QR' };
+        if (!navigator.canShare || navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          setQrSaved(true);
+          setLaunchMessage(
+            'In the share menu tap Save Image / Photos / Gallery to keep the QR in your gallery.',
+          );
+          setTimeout(() => setQrSaved(false), 3500);
+          return;
+        }
+      } catch (err) {
+        // User dismissed share sheet — not an error
+        if (err?.name === 'AbortError') return;
+        // fall through to download
       }
+    }
 
+    // Desktop / share unavailable: download PNG (often Downloads folder, not Photos)
+    try {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -119,11 +153,11 @@ const QRModal = ({
 
       setQrSaved(true);
       setLaunchMessage(
-        device.isIOS
-          ? 'QR image downloaded. Open it and tap Share → Save Image if it is not in Photos yet.'
-          : 'QR image saved to Downloads / Gallery.',
+        isPhone
+          ? 'File downloaded. Open Downloads, open the QR image, then Share → Save to Photos/Gallery. Or long-press the QR above → Save Image.'
+          : 'QR downloaded. On phone, use Save QR so it can go to Photos/Gallery.',
       );
-      setTimeout(() => setQrSaved(false), 2500);
+      setTimeout(() => setQrSaved(false), 4000);
     } catch {
       setLaunchError('Unable to save QR. Long-press the QR image and choose Save Image.');
     }
@@ -235,8 +269,12 @@ const QRModal = ({
                   : 'bg-gray-900 text-white active:bg-black'
               }`}
             >
-              {qrSaved ? 'QR saved' : 'Save QR to Gallery'}
+              {qrSaved ? 'QR ready' : 'Save QR to Photos / Gallery'}
             </button>
+            <p className="text-[11px] text-gray-500 mt-2">
+              Phone: tap button → choose <strong>Save Image</strong> / Photos. Or long-press the QR
+              → Save Image.
+            </p>
           </div>
 
           <button
@@ -252,7 +290,9 @@ const QRModal = ({
           <div className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-3 text-xs text-gray-600 space-y-1">
             <p className="font-semibold text-gray-800">How to pay</p>
             <p>1. Scan the QR in your UPI app, or Copy UPI ID and send ₹{amount}.</p>
-            <p>2. Or Save QR → open UPI app → scan from gallery / photos.</p>
+            <p>
+              2. Or Save QR → tap Save Image in the share menu → open UPI app → scan from Photos.
+            </p>
             <p>3. After payment, enter UTR below and submit order.</p>
           </div>
 
