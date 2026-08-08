@@ -12,23 +12,20 @@ export const createPaymentReference = () => {
 export const formatUpiAmount = (value) => {
   const num = Number(value);
   if (!Number.isFinite(num) || num <= 0) return null;
-  return num.toFixed(2);
+  // Prefer compact amount (5 not 5.00) when whole; keep decimals when needed
+  return Number.isInteger(num) ? String(num) : String(Number(num.toFixed(2)));
 };
-
-/** Fixed transaction purpose note (URL-encoded in the deep link). */
-export const UPI_TRANSACTION_NOTE = 'Fish Mart Order';
 
 /**
  * Build a Personal (P2P) UPI deep link for checkout.
  *
- * Omits merchant-only fields (mc, orgid, sign) so GPay treats this as a
- * peer-to-peer transfer, not an unverified merchant intent.
+ * Format: upi://pay?pa=...&pn=...&tr=...&am=...
+ * Omits tn, cu, mc, orgid, sign (GPay P2P-friendly).
  *
- * Encoding rules:
  * - pa: literal '@' (NOT %40)
- * - pn / tn: URL-encoded
- * - tr: unique per-checkout alphanumeric reference
- * - no mc / orgid / sign
+ * - pn: URL-encoded
+ * - tr: unique per-checkout reference
+ * - am: dynamic order amount
  *
  * @returns {{ upiUri: string, params: Record<string,string>, amount: string, paymentRef: string } | { error: string }}
  */
@@ -42,7 +39,6 @@ export const buildUpiPayment = ({
   const pn = String(merchantName || 'PR Nexus FishMart').trim();
   const am = formatUpiAmount(amount);
   const tr = String(paymentRef || createPaymentReference()).trim();
-  const tn = UPI_TRANSACTION_NOTE;
 
   if (!pa || !pa.includes('@') || !/^[a-zA-Z0-9.\-_]+@[a-zA-Z0-9.\-_]+$/.test(pa)) {
     return { error: 'Payee UPI ID is missing or invalid.' };
@@ -58,23 +54,13 @@ export const buildUpiPayment = ({
     return { error: 'Payment reference is missing or invalid.' };
   }
 
-  // Personal P2P params only — never include mc / orgid / sign
-  const params = {
-    pa,
-    pn,
-    tr,
-    tn,
-    am,
-    cu: 'INR',
-  };
+  const params = { pa, pn, tr, am };
 
   const upiUri =
     `upi://pay?pa=${pa}` +
     `&pn=${encodeURIComponent(pn)}` +
     `&tr=${tr}` +
-    `&tn=${encodeURIComponent(tn)}` +
-    `&am=${am}` +
-    `&cu=INR`;
+    `&am=${am}`;
 
   if (import.meta.env.DEV) {
     console.log('[UPI] payee:', pa);
