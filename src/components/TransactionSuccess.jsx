@@ -23,6 +23,9 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
 
   if (!isOpen || !order) return null;
 
+  const isPendingConfirmation =
+    order.paymentStatus === 'PENDING_CONFIRMATION' || order.paidVerified === false;
+
   // Calculate discount
   const getSubtotal = () => {
     return order.items.reduce(
@@ -131,8 +134,14 @@ Thank you for your order! 🐟`;
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Payment Successful!</h2>
-              <p className="text-sm text-gray-600">Your order has been placed</p>
+              <h2 className="text-xl font-bold text-gray-900">
+                {isPendingConfirmation ? 'Order Received' : 'Payment Successful!'}
+              </h2>
+              <p className="text-sm text-gray-600">
+                {isPendingConfirmation
+                  ? 'Payment pending confirmation'
+                  : 'Your order has been placed'}
+              </p>
             </div>
           </div>
           <button
@@ -150,8 +159,17 @@ Thank you for your order! 🐟`;
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
               <CheckCircle className="w-12 h-12 text-green-600" />
             </div>
-            <h3 className="text-2xl font-bold text-green-600 mb-2">Transaction Complete!</h3>
-            <p className="text-gray-600">Thank you for your purchase. Your order is being processed.</p>
+            <h3 className={`text-2xl font-bold mb-2 ${isPendingConfirmation ? 'text-amber-600' : 'text-green-600'}`}>
+              {isPendingConfirmation ? 'Awaiting Payment Verification' : 'Transaction Complete!'}
+            </h3>
+            <p className="text-gray-600">
+              {isPendingConfirmation
+                ? 'Thank you. We will confirm your UPI payment using the transaction ID you provided. Opening a UPI app alone does not mark the order as paid.'
+                : 'Thank you for your purchase. Your order is being processed.'}
+            </p>
+            {order.paymentRef && (
+              <p className="text-xs text-gray-500 mt-2">Payment ref: {order.paymentRef}</p>
+            )}
           </div>
 
           {/* Main Content Grid */}

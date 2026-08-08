@@ -32,6 +32,8 @@ import {
   QUANTITY_LIMITS,
   calculateLineTotal,
 } from './utils/quantityUtils';
+import { resolveMerchantName, resolveMerchantUpiId } from './config/paymentConfig';
+import { createPaymentReference, logPaymentAttempt } from './utils/upiPayment';
 
 const DEFAULT_DISCOUNT_SETTINGS = { isEnabled: true, percentage: 5, minimumAmount: 1000 };
 
@@ -138,6 +140,7 @@ function App() {
   const [showQRPayment, setShowQRPayment] = useState(false);
   const [currentCheckoutCart, setCurrentCheckoutCart] = useState([]);
   const [currentCheckoutTotal, setCurrentCheckoutTotal] = useState(0);
+  const [paymentSession, setPaymentSession] = useState(null);
   
   // Debug logging for checkout flow states
   console.log('App render - showCheckoutConfirmation:', showCheckoutConfirmation, 'showQRPayment:', showQRPayment);
@@ -439,14 +442,16 @@ function App() {
     setShowCheckoutConfirmation(true);
   };
 
-  // Step 1 to Step 2: Proceed to Payment
+  // Step 1 to Step 2: Proceed to Payment — recalculate & lock amount + payment ref
   const handleProceedToPayment = (deliveryInfo) => {
-    console.log('🚀 App.jsx: handleProceedToPayment called with delivery info:', deliveryInfo);
-    console.log('📊 App.jsx: Current showCheckoutConfirmation:', showCheckoutConfirmation);
-    console.log('📊 App.jsx: Current showQRPayment:', showQRPayment);
-
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
+    // Recalculate from cart line items — do not trust a browser-edited total alone
     const summary = calculateCartSummary(currentCheckoutCart, discountSettings);
+
+    if (!summary.items.length || summary.total <= 0) {
+      addNotification('Unable to start payment — cart total is invalid.', 'error');
+      return;
+    }
 
     if (Math.abs(summary.total - currentCheckoutSummary.total) > 0.01) {
       addNotification('Quantity or total mismatch detected — please review your cart before checkout.', 'error');
@@ -455,60 +460,83 @@ function App() {
       setShowCart(true);
       return;
     }
-    
-    // Store delivery information
+
+    const paymentRef = createPaymentReference();
+    const orderId = `ORDER_${Date.now()}`;
+    const merchantUpiId = resolveMerchantUpiId(fishData?.shopInfo);
+    const merchantName = resolveMerchantName(fishData?.shopInfo);
+
+    const session = {
+      orderId,
+      paymentRef,
+      amount: summary.total,
+      subtotal: summary.subtotal,
+      discount: summary.discount,
+      items: summary.items,
+      merchantUpiId,
+      merchantName,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    };
+
+    setCurrentCheckoutCart(summary.items);
+    setCurrentCheckoutSummary(summary);
+    setCurrentCheckoutTotal(summary.total);
+    setPaymentSession(session);
+
+    logPaymentAttempt({
+      orderId,
+      paymentRef,
+      amount: summary.total.toFixed(2),
+      merchantUpiId,
+      params: { cu: 'INR', tn: paymentRef, pn: merchantName },
+    });
+
     if (deliveryInfo) {
-      console.log('📝 App.jsx: Storing delivery information:', deliveryInfo);
-      // You can store this in state or localStorage for later use
       localStorage.setItem('currentOrderDeliveryInfo', JSON.stringify(deliveryInfo));
     }
-    
-    console.log('🔄 App.jsx: About to call setShowCheckoutConfirmation(false)');
+
     setShowCheckoutConfirmation(false);
-    
-    console.log('🔄 App.jsx: About to call setShowQRPayment(true)');
     setShowQRPayment(true);
-    
-    console.log('✅ App.jsx: State updates called');
   };
 
-  // Step 2 to Step 3: Payment Done with Transaction ID
-  const handlePaymentDone = (transactionId) => {
-    console.log('Payment done with transaction ID:', transactionId);
-    
-    // Get delivery information from localStorage
+  // User claims payment complete — store as PENDING_CONFIRMATION (not verified PAID)
+  const handlePaymentDone = (transactionId, meta = {}) => {
     const deliveryInfo = JSON.parse(localStorage.getItem('currentOrderDeliveryInfo') || '{}');
-    console.log('📦 App.jsx: Retrieved delivery info:', deliveryInfo);
-    
-    // Create order summary with transaction ID and delivery info
+    const lockedAmount = paymentSession?.amount ?? currentCheckoutTotal;
+    const orderId = paymentSession?.orderId || `ORDER_${Date.now()}`;
+    const paymentRef = paymentSession?.paymentRef || meta.paymentRef || createPaymentReference();
+
     const orderSummary = {
-      items: currentCheckoutCart,
-      totalPrice: currentCheckoutTotal,
-      deliveryInfo: deliveryInfo,
-      transactionId: transactionId,
+      items: paymentSession?.items || currentCheckoutCart,
+      totalPrice: lockedAmount,
+      deliveryInfo,
+      transactionId,
+      paymentRef,
+      paymentStatus: 'PENDING_CONFIRMATION',
+      paidVerified: false,
       timestamp: new Date().toISOString(),
-      orderId: `ORDER_${Date.now()}`
+      orderId,
+      merchantUpiId: paymentSession?.merchantUpiId || resolveMerchantUpiId(fishData?.shopInfo),
     };
-    
-    // Store order in localStorage
+
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     orders.push(orderSummary);
     localStorage.setItem('orders', JSON.stringify(orders));
-    
-    // Clear cart after successful order
+
     setCart([]);
-    
-    // Close QR payment modal
     setShowQRPayment(false);
-    
-    // Show transaction success modal - Step 3
+    setPaymentSession(null);
+
     setShowTransactionSuccess({
       show: true,
-      order: orderSummary
+      order: orderSummary,
     });
-    
-    // Show success notification
-    addNotification(`Payment successful! Order ID: ${orderSummary.orderId}`, 'success');
+
+    addNotification(
+      `Order submitted · payment pending confirmation. Ref: ${paymentRef}`,
+      'info',
+    );
   };
 
   const toggleFavorite = (fishId) => {
@@ -645,19 +673,21 @@ function App() {
         />
 
         {/* Step 2: QR Payment with Transaction ID Input */}
-        {showQRPayment && fishData && (
-          <>
-            {console.log('App.jsx: Rendering QRModal - showQRPayment is true, fishData:', fishData)}
-            <QRModal
-              fish={{ name: 'Order', rate: currentCheckoutTotal }}
-              shopInfo={fishData.shopInfo}
-              onClose={() => setShowQRPayment(false)}
-              isCheckoutFlow={true}
-              cart={currentCheckoutCart}
-              totalPrice={currentCheckoutTotal}
-              onPaymentDone={handlePaymentDone}
-            />
-          </>
+        {showQRPayment && fishData && paymentSession && (
+          <QRModal
+            fish={{ name: 'Order', rate: paymentSession.amount }}
+            shopInfo={fishData.shopInfo}
+            onClose={() => {
+              setShowQRPayment(false);
+              // Keep session until cancelled fully — clear locked session on cancel
+              setPaymentSession(null);
+            }}
+            isCheckoutFlow={true}
+            cart={paymentSession.items || currentCheckoutCart}
+            totalPrice={paymentSession.amount}
+            paymentSession={paymentSession}
+            onPaymentDone={handlePaymentDone}
+          />
         )}
 
         {/* Step 3: Transaction Success Modal */}
