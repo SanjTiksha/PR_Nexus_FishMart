@@ -13,7 +13,6 @@ import ShoppingCart from './components/ShoppingCart';
 import CheckoutConfirmation from './components/CheckoutConfirmation';
 import QRModal from './components/QRModal';
 import TransactionSuccess from './components/TransactionSuccess';
-import FloatingActionButton from './components/FloatingActionButton';
 import Toast from './components/Toast';
 import SmartBanner from './components/SmartBanner';
 import CookingGuide from './components/CookingGuide';
@@ -642,48 +641,6 @@ function App() {
         </main>
         
         <Footer shopInfo={fishData.shopInfo} />
-        
-        {/* Enhanced Features */}
-        <FloatingActionButton>
-          <button
-            onClick={() => setShowCart(true)}
-            className="w-12 h-12 bg-blue-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-            title="Shopping Cart"
-          >
-            🛒
-          </button>
-          <button
-            onClick={() => setShowBasketEstimator(true)}
-            className="w-12 h-12 bg-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-            title="Basket Estimator"
-          >
-            🧮
-          </button>
-          <button
-            onClick={() => setShowPriceAlerts(true)}
-            className="w-12 h-12 bg-yellow-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-            title="Price Alerts"
-          >
-            🔔
-          </button>
-          <button
-            onClick={() => setShowVoiceSearch(true)}
-            className="w-12 h-12 bg-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-            title="Voice Search"
-          >
-            🎤
-          </button>
-          <button
-            onClick={() => {
-              const phoneNumber = fishData.shopInfo.whatsapp || fishData.shopInfo.phone.replace(/[^0-9]/g, '');
-              window.open(`https://wa.me/${phoneNumber}`, '_blank');
-            }}
-            className="w-12 h-12 bg-green-500 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center"
-            title="WhatsApp Us"
-          >
-            💬
-          </button>
-        </FloatingActionButton>
 
         {/* Shopping Cart */}
         <ShoppingCart

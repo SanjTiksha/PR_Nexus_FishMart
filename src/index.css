@@ -332,3 +332,162 @@
   }
 }
 
+/* ========== FishMart header interactions ========== */
+.fm-nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9375rem;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  color: #1e293b;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  border-radius: 0.375rem;
+  transition: color 200ms ease-out;
+}
+
+.fm-nav-link-label {
+  display: inline-block;
+  transition: transform 200ms ease-out;
+}
+
+.fm-nav-link-underline {
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.15rem;
+  height: 3px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #087ea4 0%, #0b9b9b 100%);
+  transform: scaleX(0);
+  transform-origin: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 220ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.fm-nav-link--active {
+  color: #087ea4;
+  font-weight: 700;
+}
+
+.fm-nav-link--active .fm-nav-link-underline {
+  transform: scaleX(1);
+  opacity: 1;
+}
+
+.fm-header-logo,
+.fm-header-logo-mark,
+.fm-header-whatsapp,
+.fm-header-cart,
+.fm-header-tap,
+.fm-mobile-nav-link {
+  transition:
+    transform 200ms ease-out,
+    box-shadow 200ms ease-out,
+    color 180ms ease-out,
+    background-color 180ms ease-out;
+}
+
+.fm-mobile-nav-link {
+  display: block;
+  padding: 0.75rem 0.85rem;
+  min-height: 48px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  border-left: 3px solid transparent;
+  border-radius: 0 0.5rem 0.5rem 0;
+  text-decoration: none;
+}
+
+.fm-mobile-nav-link--active {
+  color: #087ea4;
+  font-weight: 700;
+  border-left-color: #087ea4;
+  background-color: rgba(224, 242, 254, 0.7);
+}
+
+/* Touch / press feedback — no layout shift (transform only) */
+.fm-header-tap:active,
+.fm-mobile-nav-link:active,
+.fm-header-whatsapp:active,
+.fm-header-cart:active {
+  transform: scale(0.98);
+}
+
+/* Real hover devices only (desktop mouse / trackpad) */
+@media (hover: hover) and (pointer: fine) {
+  .fm-nav-link:hover {
+    color: #087ea4;
+  }
+
+  .fm-nav-link:hover .fm-nav-link-label {
+    transform: translateY(-1.5px);
+  }
+
+  .fm-nav-link:hover .fm-nav-link-underline,
+  .fm-nav-link--active:hover .fm-nav-link-underline {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  .fm-nav-link--active:hover .fm-nav-link-label {
+    transform: translateY(-1px);
+  }
+
+  .fm-header-logo:hover .fm-header-logo-mark {
+    transform: scale(1.02) translateY(-1px);
+    box-shadow: 0 6px 14px rgba(8, 126, 164, 0.22);
+  }
+
+  .fm-header-whatsapp:hover {
+    background-color: #15803d;
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 8px 18px rgba(22, 163, 74, 0.28);
+  }
+
+  .fm-header-cart:hover {
+    color: #087ea4;
+    transform: translateY(-2px) scale(1.06);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+  }
+
+  .fm-mobile-nav-link:hover {
+    color: #087ea4;
+    background-color: #f8fafc;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-nav-link,
+  .fm-nav-link-label,
+  .fm-nav-link-underline,
+  .fm-header-logo,
+  .fm-header-logo-mark,
+  .fm-header-whatsapp,
+  .fm-header-cart,
+  .fm-header-tap,
+  .fm-mobile-nav-link {
+    transition: none !important;
+  }
+
+  .fm-nav-link:hover .fm-nav-link-label,
+  .fm-nav-link--active:hover .fm-nav-link-label,
+  .fm-header-logo:hover .fm-header-logo-mark,
+  .fm-header-whatsapp:hover,
+  .fm-header-cart:hover,
+  .fm-header-tap:active,
+  .fm-mobile-nav-link:active,
+  .fm-header-whatsapp:active,
+  .fm-header-cart:active {
+    transform: none !important;
+  }
+}
+
