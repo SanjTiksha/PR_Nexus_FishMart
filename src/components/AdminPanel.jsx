@@ -24,6 +24,7 @@ import {
 } from '../utils/firestoreBackup';
 import BulkRateUpdateForm from './BulkRateUpdateForm';
 import AdminOffers from './AdminOffers';
+import AdminOrders from './AdminOrders';
 
 const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
   const [activeTab, setActiveTab] = useState('fishes');
@@ -813,6 +814,10 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
           </div>
           );
         })()}
+
+        {activeTab === 'orders' && (
+          <AdminOrders shopInfo={fishData?.shopInfo} />
+        )}
 
         {activeTab === 'stock' && (
           <DailyStockManager 

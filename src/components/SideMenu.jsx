@@ -1,18 +1,32 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { FiMenu, FiX, FiLogOut, FiSettings, FiUser } from 'react-icons/fi';
+import {
+  FiMenu,
+  FiX,
+  FiLogOut,
+  FiSettings,
+  FiShoppingBag,
+  FiPackage,
+  FiTrendingUp,
+  FiStar,
+  FiHome,
+  FiTag,
+  FiDatabase,
+  FiActivity,
+} from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 
 const menuItems = [
-  { id: 'fishes', label: 'Fish Management' },
-  { id: 'stock', label: 'Daily Stock' },
-  { id: 'bulkRates', label: 'Bulk Rate Update' },
-  { id: 'rates', label: 'Rate History' },
-  { id: 'reviews', label: 'Reviews' },
-  { id: 'shop', label: 'Shop Settings' },
-  { id: 'promotions', label: 'Promotions' },
-  { id: 'backup', label: 'Backup & Restore' },
-  { id: 'diagnostics', label: 'Diagnostics' },
+  { id: 'fishes', label: 'Fish Management', icon: FiPackage },
+  { id: 'orders', label: 'Orders', icon: FiShoppingBag },
+  { id: 'stock', label: 'Daily Stock', icon: FiDatabase },
+  { id: 'bulkRates', label: 'Bulk Rate Update', icon: FiTrendingUp },
+  { id: 'rates', label: 'Rate History', icon: FiActivity },
+  { id: 'reviews', label: 'Reviews', icon: FiStar },
+  { id: 'shop', label: 'Shop Settings', icon: FiHome },
+  { id: 'promotions', label: 'Promotions', icon: FiTag },
+  { id: 'backup', label: 'Backup & Restore', icon: FiSettings },
+  { id: 'diagnostics', label: 'Diagnostics', icon: FiSettings },
 ];
 
 const SideMenu = ({ onNavigate, onLogout, isOpen: externalOpen, onClose, adminInfo = {} }) => {
@@ -93,17 +107,20 @@ const SideMenu = ({ onNavigate, onLogout, isOpen: externalOpen, onClose, adminIn
               {adminInfo.email && <p className="text-sm text-white/80">{adminInfo.email}</p>}
             </div>
 
-            <div className="flex flex-col gap-4 px-6 text-base font-medium">
-              {menuItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavigate(item.id)}
-                  className="w-full text-left px-3 py-3 rounded-lg text-white/90 hover:bg-white/20 font-medium transition-all flex items-center gap-3"
-                >
-                  <FiSettings className="text-white/70" size={18} />
-                  <span>{item.label}</span>
-                </button>
-              ))}
+            <div className="flex flex-col gap-2 px-6 text-base font-medium overflow-y-auto">
+              {menuItems.map((item) => {
+                const Icon = item.icon || FiSettings;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavigate(item.id)}
+                    className="w-full text-left px-3 py-3 rounded-lg text-white/90 hover:bg-white/20 font-medium transition-all flex items-center gap-3"
+                  >
+                    <Icon className="text-white/70 shrink-0" size={18} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="p-6 border-t border-white/20 flex justify-between items-center">
@@ -124,4 +141,3 @@ const SideMenu = ({ onNavigate, onLogout, isOpen: externalOpen, onClose, adminIn
 };
 
 export default SideMenu;
-

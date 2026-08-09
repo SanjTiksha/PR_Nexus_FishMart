@@ -37,7 +37,7 @@ import {
   calculateCartSummary,
   DEFAULT_DISCOUNT_SETTINGS,
 } from './utils/cartPricing';
-import { incrementOfferUsage } from './services/firestoreService';
+import { createCustomerOrder, incrementOfferUsage } from './services/firestoreService';
 
 const ScrollToTop = ({ enabled }) => {
   const location = useLocation();
@@ -507,8 +507,9 @@ function App() {
     setShowQRPayment(true);
   };
 
-  // User claims payment complete — store as PENDING_CONFIRMATION (not verified PAID)
-  const handlePaymentDone = (transactionId, meta = {}) => {
+  // User claims payment complete — record order in Firestore first, then show success.
+  // WhatsApp is never part of this path; success only after a successful write.
+  const handlePaymentDone = async (transactionId, meta = {}) => {
     const deliveryInfo = JSON.parse(localStorage.getItem('currentOrderDeliveryInfo') || '{}');
     // Always use locked payment-session amount — never recompute at claim time
     const lockedAmount = paymentSession?.amount ?? currentCheckoutTotal;
@@ -535,28 +536,45 @@ function App() {
       merchantUpiId: paymentSession?.merchantUpiId || resolveMerchantUpiId(fishData?.shopInfo),
     };
 
-    const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-    orders.push(orderSummary);
-    localStorage.setItem('orders', JSON.stringify(orders));
+    try {
+      // Firestore write must succeed before TransactionSuccess is shown
+      const savedOrder = await createCustomerOrder(orderSummary);
 
-    // Count offer use only after payment claim (same trust model as UTR entry)
-    if (paymentSession?.offerId) {
-      incrementOfferUsage(paymentSession.offerId).catch(() => {});
+      const orders = JSON.parse(localStorage.getItem('orders') || '[]');
+      const withoutSameId = orders.filter((o) => o?.orderId !== savedOrder.orderId);
+      withoutSameId.push(savedOrder);
+      localStorage.setItem('orders', JSON.stringify(withoutSameId));
+
+      // Count offer use only after the order is recorded
+      if (paymentSession?.offerId) {
+        incrementOfferUsage(paymentSession.offerId).catch(() => {});
+      }
+
+      setCart([]);
+      setShowQRPayment(false);
+      setPaymentSession(null);
+
+      setShowTransactionSuccess({
+        show: true,
+        order: savedOrder,
+      });
+
+      addNotification(
+        `Order submitted successfully. Ref: ${paymentRef}`,
+        'success',
+      );
+
+      return { success: true, order: savedOrder };
+    } catch (error) {
+      console.error('Failed to record order in Firestore:', error);
+      addNotification(
+        'Unable to record your order. Please try again.',
+        'error',
+        8000,
+      );
+      // Keep QR modal / payment session intact so customer can retry without a new order ID
+      return { success: false, error };
     }
-
-    setCart([]);
-    setShowQRPayment(false);
-    setPaymentSession(null);
-
-    setShowTransactionSuccess({
-      show: true,
-      order: orderSummary,
-    });
-
-    addNotification(
-      `Order placed successfully. Ref: ${paymentRef}`,
-      'success',
-    );
   };
 
   const toggleFavorite = (fishId) => {

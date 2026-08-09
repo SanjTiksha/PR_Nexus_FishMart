@@ -24,6 +24,8 @@ const QRModal = ({
   const [device, setDevice] = useState(() => detectPaymentDevice());
   const [launchMessage, setLaunchMessage] = useState('');
   const [launchError, setLaunchError] = useState('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [orderSaveError, setOrderSaveError] = useState('');
   const qrCanvasRef = useRef(null);
 
   const merchantUpiId = resolveMerchantUpiId(shopInfo);
@@ -163,14 +165,25 @@ const QRModal = ({
     }
   };
 
-  const handleSubmitPaymentClaim = () => {
-    if (!isCheckoutFlow || !onPaymentDone || !transactionId.trim()) return;
-    onPaymentDone(transactionId.trim(), {
-      paymentRef,
-      orderId,
-      amount: Number(amount),
-      status: 'PENDING_CONFIRMATION',
-    });
+  const handleSubmitPaymentClaim = async () => {
+    if (!isCheckoutFlow || !onPaymentDone || !transactionId.trim() || isSubmittingOrder) return;
+    setIsSubmittingOrder(true);
+    setOrderSaveError('');
+    try {
+      const result = await onPaymentDone(transactionId.trim(), {
+        paymentRef,
+        orderId,
+        amount: Number(amount),
+        status: 'PENDING_CONFIRMATION',
+      });
+      if (result && result.success === false) {
+        setOrderSaveError('Unable to record your order. Please try again.');
+      }
+    } catch {
+      setOrderSaveError('Unable to record your order. Please try again.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   const qrSize = device.isMobile ? 200 : 220;
@@ -305,21 +318,31 @@ const QRModal = ({
               <input
                 type="text"
                 value={transactionId}
-                onChange={(e) => setTransactionId(e.target.value)}
+                onChange={(e) => {
+                  setTransactionId(e.target.value);
+                  if (orderSaveError) setOrderSaveError('');
+                }}
                 placeholder="Enter UTR / transaction ID"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-center font-medium"
+                disabled={isSubmittingOrder}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 text-center font-medium disabled:opacity-60"
               />
+              {orderSaveError && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <p className="font-semibold">Unable to record your order</p>
+                  <p>Please try again.</p>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleSubmitPaymentClaim}
-                disabled={!transactionId.trim()}
+                disabled={!transactionId.trim() || isSubmittingOrder}
                 className={`w-full mt-3 min-h-[48px] rounded-xl font-semibold ${
-                  transactionId.trim()
+                  transactionId.trim() && !isSubmittingOrder
                     ? 'bg-green-600 text-white active:bg-green-800'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                Submit order
+                {isSubmittingOrder ? 'Recording order…' : 'Submit order'}
               </button>
             </div>
           )}

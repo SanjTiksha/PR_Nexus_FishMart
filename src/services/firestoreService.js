@@ -68,7 +68,8 @@ const COLLECTIONS = {
   SHOP_SETTING: "shopSetting",
   PROMOTION_AND_DISCOUNTS: "promotionAndDiscounts",
   ADMIN_LOGS: "AdminLogs",
-  OFFERS: "offers"
+  OFFERS: "offers",
+  ORDERS: "orders",
 };
 
 /**
@@ -1536,6 +1537,144 @@ export const incrementOfferUsage = async (offerId) => {
     console.error('❌ Error incrementing offer usage:', error);
     return false;
   }
+};
+
+/**
+ * Strip undefined values (Firestore rejects them) while preserving null/false/0.
+ */
+const stripUndefinedDeep = (value) => {
+  if (Array.isArray(value)) {
+    return value.map(stripUndefinedDeep);
+  }
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const out = {};
+    Object.entries(value).forEach(([key, val]) => {
+      if (val !== undefined) {
+        out[key] = stripUndefinedDeep(val);
+      }
+    });
+    return out;
+  }
+  return value;
+};
+
+/**
+ * Persist a customer order to Firestore BEFORE showing success UI.
+ * Uses orderId as document ID so retries with the same ID do not create duplicates.
+ * @param {object} order - Locked checkout/payment snapshot
+ * @returns {Promise<object>} Saved order payload (includes firestoreId)
+ */
+export const createCustomerOrder = async (order) => {
+  if (!order?.orderId) {
+    throw new Error('Order ID is required to record the order');
+  }
+
+  const payload = stripUndefinedDeep({
+    ...order,
+    // Default fulfillment status for new orders (admin may update later)
+    orderStatus: order.orderStatus || 'Processing',
+    createdAt: order.createdAt || order.timestamp || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const orderRef = doc(db, COLLECTIONS.ORDERS, String(order.orderId));
+  await setDoc(orderRef, payload, { merge: true });
+
+  console.log('✅ Customer order recorded:', order.orderId);
+  return {
+    ...payload,
+    firestoreId: orderRef.id,
+  };
+};
+
+const sortOrdersNewestFirst = (orders) =>
+  [...orders].sort((a, b) => {
+    const ta = new Date(a.timestamp || a.createdAt || 0).getTime();
+    const tb = new Date(b.timestamp || b.createdAt || 0).getTime();
+    return tb - ta;
+  });
+
+/**
+ * Load customer orders for Admin Orders module.
+ * Collection: orders (same docs written by createCustomerOrder).
+ */
+export const getCustomerOrders = async () => {
+  try {
+    const ordersRef = collection(db, COLLECTIONS.ORDERS);
+    let snapshot;
+    try {
+      snapshot = await getDocs(query(ordersRef, orderBy('timestamp', 'desc')));
+    } catch (orderError) {
+      console.warn('⚠️ Orders orderBy(timestamp) failed, loading unordered:', orderError.message);
+      try {
+        snapshot = await getDocs(query(ordersRef, orderBy('createdAt', 'desc')));
+      } catch {
+        snapshot = await getDocs(ordersRef);
+      }
+    }
+
+    const orders = snapshot.docs.map((d) => {
+      const data = d.data() || {};
+      return {
+        firestoreId: d.id,
+        ...data,
+        orderId: data.orderId || d.id,
+        orderStatus: data.orderStatus || 'Processing',
+      };
+    });
+
+    return sortOrdersNewestFirst(orders);
+  } catch (error) {
+    console.error('❌ Error loading customer orders:', error);
+    throw new Error('Unable to load orders. Please try again.');
+  }
+};
+
+/**
+ * Update payment fields only — never touches totals, items, or UTR unless explicitly passed.
+ * paymentStatus: PENDING_CONFIRMATION | VERIFIED | FAILED
+ */
+export const updateCustomerOrderPayment = async (orderId, paymentStatus) => {
+  if (!orderId) throw new Error('Order ID is required');
+  const allowed = ['PENDING_CONFIRMATION', 'VERIFIED', 'FAILED'];
+  if (!allowed.includes(paymentStatus)) {
+    throw new Error('Invalid payment status');
+  }
+
+  const paidVerified = paymentStatus === 'VERIFIED';
+  const orderRef = doc(db, COLLECTIONS.ORDERS, String(orderId));
+  await updateDoc(orderRef, {
+    paymentStatus,
+    paidVerified,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return { orderId: String(orderId), paymentStatus, paidVerified };
+};
+
+/**
+ * Update fulfillment orderStatus only — never touches financial snapshot.
+ */
+export const updateCustomerOrderStatus = async (orderId, orderStatus) => {
+  if (!orderId) throw new Error('Order ID is required');
+  const allowed = [
+    'Processing',
+    'Preparing',
+    'Out for Delivery',
+    'Delivered',
+    'Cancelled',
+  ];
+  if (!allowed.includes(orderStatus)) {
+    throw new Error('Invalid order status');
+  }
+
+  const orderRef = doc(db, COLLECTIONS.ORDERS, String(orderId));
+  await updateDoc(orderRef, {
+    orderStatus,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return { orderId: String(orderId), orderStatus };
 };
 
 /**
