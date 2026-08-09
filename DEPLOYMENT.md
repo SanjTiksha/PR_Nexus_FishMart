@@ -55,7 +55,7 @@ firebase deploy --only hosting
 - [ ] Fish catalog loads from Firestore
 - [ ] Cart → checkout → map pin → UPI / WhatsApp flow works
 - [ ] Contact / WhatsApp / phone links work
-- [ ] Change admin password (`admin123` is for testing only)
+- [ ] Confirm admin password is known only to authorized operators (not published in UI/docs)
 - [ ] Confirm UPI QR / ID is correct for production payments
 
 ## Notes

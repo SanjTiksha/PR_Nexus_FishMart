@@ -110,7 +110,7 @@ The diagnostic tool performs the following tests:
 ## 🔍 Using the Diagnostics Component
 
 ### Access Diagnostics
-1. Log in to Admin Panel (password: `admin123`)
+1. Log in to Admin Panel with the authorized admin password
 2. Click on **🔍 Diagnostics** tab
 3. Click **"Run Diagnostics"** button
 

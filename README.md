@@ -95,8 +95,8 @@ See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for Netlify, Vercel, and GitHub Pages.â
 ## ðŸ”§ Configuration
 
 ### Admin Access
-- **Default Password**: `admin123`
 - **Access URL**: `/admin`
+- Admin password is not published in documentation.
 
 ### Data Management
 - Fish data stored in `src/data/fishData.json`

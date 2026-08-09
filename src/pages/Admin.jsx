@@ -4,14 +4,14 @@ import AdminPanel from '../components/AdminPanel';
 
 const Admin = ({ fishData, refreshFishData }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminPassword] = useState('admin123'); // In production, this should be more secure
+  // Frontend-only password check (not a secure auth system).
+  const [adminPassword] = useState('admin6044');
 
   const handleLogin = (password) => {
     if (password === adminPassword) {
       setIsAuthenticated(true);
       localStorage.setItem('isAdmin', 'true');
       localStorage.setItem('adminMode', 'true');
-      console.log('Admin login successful - setting admin mode');
       return true;
     }
     return false;
