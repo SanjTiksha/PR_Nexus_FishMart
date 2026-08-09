@@ -23,9 +23,11 @@ import {
   uploadAllCollections
 } from '../utils/firestoreBackup';
 import BulkRateUpdateForm from './BulkRateUpdateForm';
+import AdminOffers from './AdminOffers';
 
 const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
   const [activeTab, setActiveTab] = useState('fishes');
+  const [promoSection, setPromoSection] = useState('basket'); // basket | banner | offers
   const [editingFish, setEditingFish] = useState(null);
   const [showAddFish, setShowAddFish] = useState(false);
   const [selectedFish, setSelectedFish] = useState([]);
@@ -1176,10 +1178,41 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
 
         {activeTab === 'promotions' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Promotions & Discounts</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Promotions</h2>
+
+            {/* Internal Promotions navigation */}
+            <div className="flex flex-wrap gap-2 bg-white rounded-xl border border-gray-200 p-2 shadow-sm">
+              {[
+                { id: 'basket', label: 'Basket Discount' },
+                { id: 'banner', label: 'Promotion Banner' },
+                { id: 'offers', label: 'Offers & Promotions' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setPromoSection(item.id);
+                    // Smooth-scroll to section after it becomes visible
+                    setTimeout(() => {
+                      document
+                        .getElementById(`promo-section-${item.id}`)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 50);
+                  }}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                    promoSection === item.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-50 text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
             
-            {/* Discount Settings */}
-            <div className="card p-6">
+            {/* 1. Basket Discount — existing form unchanged */}
+            {promoSection === 'basket' && (
+            <div id="promo-section-basket" className="card p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Build Your Basket Discount Settings</h3>
               <form onSubmit={async (e) => {
                 e.preventDefault();
@@ -1287,9 +1320,11 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
                 </button>
               </form>
             </div>
+            )}
 
-            {/* Promotion Banner */}
-            <div className="card p-6">
+            {/* 2. Promotion Banner — existing form unchanged */}
+            {promoSection === 'banner' && (
+            <div id="promo-section-banner" className="card p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">Promotion Banner</h3>
               <form onSubmit={async (e) => {
                 e.preventDefault();
@@ -1503,6 +1538,14 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
                 </div>
               </form>
             </div>
+            )}
+
+            {/* 3. Offers & Promotions — existing Firestore offers module */}
+            {promoSection === 'offers' && (
+              <div id="promo-section-offers">
+                <AdminOffers fishData={fishData} refreshFishData={refreshFishData} />
+              </div>
+            )}
           </div>
         )}
 

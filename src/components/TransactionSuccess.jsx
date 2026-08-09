@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, X, Clock, Receipt, Home, ShoppingBag, MessageCircle } from 'lucide-react';
 import { calculateLineTotal, normalizeQuantity } from '../utils/quantityUtils';
+import {
+  getOrderFinancialBreakdown,
+  formatOrderDiscountLabel,
+} from '../utils/orderFinancialDisplay';
 
-const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopInfo, fishData }) => {
+const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopInfo }) => {
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
@@ -26,23 +30,9 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
   const isPendingConfirmation =
     order.paymentStatus === 'PENDING_CONFIRMATION' || order.paidVerified === false;
 
-  // Calculate discount
-  const getSubtotal = () => {
-    return order.items.reduce(
-      (total, item) => total + calculateLineTotal(item.price || item.rate, item.quantity),
-      0,
-    );
-  };
-
-  const getDiscount = () => {
-    const subtotal = getSubtotal();
-    const discountSettings = fishData?.discountSettings || { isEnabled: true, percentage: 5, minimumAmount: 1000 };
-    
-    if (discountSettings.isEnabled && subtotal >= discountSettings.minimumAmount) {
-      return parseFloat((subtotal * (discountSettings.percentage / 100)).toFixed(2));
-    }
-    return 0;
-  };
+  // Historical totals from order snapshot — never recalculate from live settings
+  const financial = getOrderFinancialBreakdown(order);
+  const discountLabel = formatOrderDiscountLabel(financial);
 
   const formatDate = (timestamp) => {
     return new Date(timestamp).toLocaleDateString('en-IN', {
@@ -59,10 +49,8 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
       `• ${item.name} (Qty: ${normalizeQuantity(item.quantity).toFixed(1)} kg) - ₹${calculateLineTotal(item.price || item.rate, item.quantity).toFixed(2)}`
     ).join('\n');
     
-    const subtotal = getSubtotal();
-    const discount = getDiscount();
-    const discountText = discount > 0 ? 
-      `\n*Subtotal:* ₹${subtotal.toFixed(2)}\n*Discount:* -₹${discount.toFixed(2)}` : '';
+    const discountText = financial.discount > 0 ? 
+      `\n*Subtotal:* ₹${financial.subtotal.toFixed(2)}\n*${discountLabel}:* -₹${financial.discount.toFixed(2)}` : '';
     
     // Get delivery information from the order
     const deliveryInfo = order.deliveryInfo || {};
@@ -97,7 +85,7 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
 *Order ID:* ${order.orderId}
 ${order.transactionId ? `*Transaction ID:* ${order.transactionId}` : ''}
 *Date:* ${formatDate(order.timestamp)}
-*Total Amount:* ₹${parseFloat(order.totalPrice).toFixed(2)}
+*Total Amount:* ₹${financial.total.toFixed(2)}
 *Items:* ${order.items.length} items
 
 *Items Ordered:*
@@ -200,7 +188,7 @@ Thank you for your order! 🐟`;
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-600">Total Amount:</span>
                     <span className="text-lg font-bold text-green-600">
-                      ₹{parseFloat(order.totalPrice).toFixed(2)}
+                      ₹{financial.total.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -225,24 +213,24 @@ Thank you for your order! 🐟`;
                     </div>
                   ))}
                   
-                  {/* Price Breakdown */}
+                  {/* Price Breakdown — order snapshot only */}
                   <div className="border-t border-blue-200 pt-2 mt-3 space-y-1">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Subtotal:</span>
-                      <span className="font-medium">₹{getSubtotal().toFixed(2)}</span>
+                      <span className="font-medium">₹{financial.subtotal.toFixed(2)}</span>
                     </div>
                     
-                    {getDiscount() > 0 && (
+                    {financial.discount > 0 && (
                       <div className="flex items-center justify-between text-sm text-green-600">
-                        <span>Discount ({fishData?.discountSettings?.percentage || 5}% {fishData?.discountSettings?.description || "off ₹1000+"}):</span>
-                        <span className="font-medium">-₹{getDiscount().toFixed(2)}</span>
+                        <span>{discountLabel}:</span>
+                        <span className="font-medium">-₹{financial.discount.toFixed(2)}</span>
                       </div>
                     )}
                     
                     <div className="flex items-center justify-between text-sm font-semibold border-t border-blue-200 pt-1">
                       <span className="text-gray-900">Total:</span>
                       <span className="text-green-600">
-                        ₹{parseFloat(order.totalPrice).toFixed(2)}
+                        ₹{financial.total.toFixed(2)}
                       </span>
                     </div>
                   </div>

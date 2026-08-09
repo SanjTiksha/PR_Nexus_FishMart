@@ -28,7 +28,14 @@ import {
 
 const RESEND_SECONDS = 10;
 
-const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPayment }) => {
+const CheckoutConfirmation = ({
+  isOpen,
+  onClose,
+  cart,
+  totalPrice,
+  orderSummary = null,
+  onProceedToPayment,
+}) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
   const [deliveryInfo, setDeliveryInfo] = useState({
@@ -391,9 +398,32 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-medium text-gray-900">Total Amount:</span>
+              <div className="border-t pt-4 space-y-2">
+                {orderSummary && (
+                  <>
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Order Subtotal</span>
+                      <span>₹{Number(orderSummary.subtotal || 0).toFixed(2)}</span>
+                    </div>
+                    {Number(orderSummary.discount || 0) > 0 && (
+                      <div className="flex justify-between text-sm text-green-600">
+                        <span>Offer Discount</span>
+                        <span>-₹{Number(orderSummary.discount).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Delivery</span>
+                      <span>₹0</span>
+                    </div>
+                    {orderSummary.appliedOffer?.title && (
+                      <p className="text-xs text-green-700 bg-green-50 rounded-lg px-2 py-1.5">
+                        {orderSummary.appliedOffer.title}
+                      </p>
+                    )}
+                  </>
+                )}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-lg font-medium text-gray-900">Payable Amount:</span>
                   <span className="text-2xl font-bold text-blue-600">
                     ₹{parseFloat(totalPrice).toFixed(2)}
                   </span>

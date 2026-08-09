@@ -6,6 +6,11 @@ import QRModal from './QRModal';
 import QuickViewModal from './QuickViewModal';
 import QuantityInput from './QuantityInput';
 import { QUANTITY_LIMITS, normalizeQuantity } from '../utils/quantityUtils';
+import {
+  getBestOfferForProduct,
+  formatOfferDiscountLabel,
+  estimateProductOfferPrice,
+} from '../utils/offerUtils';
 
 const EnhancedFishCard = ({
   fish,
@@ -55,19 +60,13 @@ const EnhancedFishCard = ({
   const cartItem = cart.find(item => item.id === fish.id);
   const isInCart = !!cartItem;
   
-  // Get promotional pricing
+  // Get promotional pricing (legacy banner promo) + active offer badge
   const priceInfo = getDisplayPrice(fish, fishData?.promotions);
-  
-  // Debug logging for Surmai and Pomfret only
-  if (fish.name === 'Surmai (King Fish)' || fish.name === 'Pomfret (White)') {
-    console.log('🐟 Promotion Debug for', fish.name, ':', {
-      originalRate: fish.rate,
-      promotions: fishData?.promotions,
-      priceInfo: priceInfo,
-      isDiscounted: priceInfo.isDiscounted,
-      discountPercentage: fishData?.promotions?.discountPercentage
-    });
-  }
+  const productOffer = getBestOfferForProduct(fish, fishData?.offers || []);
+  const offerBadge = productOffer ? formatOfferDiscountLabel(productOffer) : null;
+  const offerDisplayPrice = productOffer
+    ? estimateProductOfferPrice(fish, productOffer)
+    : null;
 
   const handleToggleFavorite = () => {
     onToggleFavorite(fish.id);
@@ -174,14 +173,32 @@ const EnhancedFishCard = ({
               </p>
             </div>
             <div className="text-right flex-shrink-0">
-              <div className="text-lg sm:text-xl font-bold text-blue-600 leading-none">
-                ₹{formatPrice(priceInfo.currentPrice)}
-                <span className="text-[11px] font-medium text-gray-500">/kg</span>
-              </div>
-              {priceInfo.isDiscounted && (
-                <span className="inline-block mt-0.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">
-                  {priceInfo.discountPercentage}% OFF
-                </span>
+              {offerDisplayPrice != null && offerBadge ? (
+                <>
+                  <div className="text-[11px] text-gray-400 line-through leading-none mb-0.5">
+                    ₹{formatPrice(fish.rate)}
+                  </div>
+                  <div className="text-lg sm:text-xl font-bold text-blue-600 leading-none">
+                    ₹{formatPrice(offerDisplayPrice)}
+                    <span className="text-[11px] font-medium text-gray-500">/kg</span>
+                  </div>
+                  <span className="inline-block mt-1 text-[10px] bg-orange-500 text-white px-1.5 py-0.5 rounded font-semibold">
+                    {offerBadge}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="text-lg sm:text-xl font-bold text-blue-600 leading-none">
+                    ₹{formatPrice(priceInfo.catalogPrice)}
+                    <span className="text-[11px] font-medium text-gray-500">/kg</span>
+                  </div>
+                  {/* Legacy banner badge only — does not change cart unit price */}
+                  {priceInfo.isDiscounted && (
+                    <span className="inline-block mt-0.5 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-semibold">
+                      {priceInfo.discountPercentage}% OFF
+                    </span>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -190,7 +207,7 @@ const EnhancedFishCard = ({
             value={quantity}
             onChange={setQuantity}
             onValidityChange={setIsQuantityValid}
-            rate={priceInfo.currentPrice}
+            rate={priceInfo.catalogPrice}
             variant="card"
           />
 

@@ -1,3 +1,5 @@
+import { lineTotalRupees, formatRupees, toPaise, fromPaise } from './moneyUtils';
+
 export const QUANTITY_LIMITS = {
   MIN: 0.5,
   MAX: 200,
@@ -72,15 +74,14 @@ export const validateQuantity = (value) => {
 export const toDisplayQuantity = (quantity) =>
   parseFloat(normalizeQuantity(quantity).toFixed(1));
 
-export const calculateLineTotal = (unitPrice, quantity) => {
-  const total = Number(unitPrice || 0) * normalizeQuantity(quantity);
-  return parseFloat(total.toFixed(2));
-};
+/** Line total in ₹ — canonical paise math (same as cart/checkout/payment). */
+export const calculateLineTotal = (unitPrice, quantity) =>
+  lineTotalRupees(unitPrice, normalizeQuantity(quantity));
 
 export const formatCurrency = (amount) =>
-  `₹${parseFloat(Number(amount || 0).toFixed(2)).toLocaleString('en-IN', {
+  `₹${fromPaise(toPaise(amount)).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 
-
+export { toPaise, fromPaise, formatRupees };

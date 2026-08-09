@@ -30,46 +30,14 @@ import {
   normalizeQuantity,
   validateQuantity,
   QUANTITY_LIMITS,
-  calculateLineTotal,
 } from './utils/quantityUtils';
 import { resolveMerchantName, resolveMerchantUpiId } from './config/paymentConfig';
 import { createPaymentReference, logPaymentAttempt } from './utils/upiPayment';
-
-const DEFAULT_DISCOUNT_SETTINGS = { isEnabled: true, percentage: 5, minimumAmount: 1000 };
-
-const calculateCartSummary = (items, discountSettings = DEFAULT_DISCOUNT_SETTINGS) => {
-  const sanitizedItems = items.map((item) => {
-    const normalizedQuantity = normalizeQuantity(item.quantity ?? QUANTITY_LIMITS.MIN);
-    return {
-      ...item,
-      quantity: normalizedQuantity,
-    };
-  });
-
-  const subtotal = sanitizedItems.reduce((total, current) => {
-    const unitPrice = current.price ?? current.rate ?? 0;
-    return total + calculateLineTotal(unitPrice, current.quantity);
-  }, 0);
-
-  let discount = 0;
-  if (
-    discountSettings?.isEnabled &&
-    subtotal >= (discountSettings?.minimumAmount ?? DEFAULT_DISCOUNT_SETTINGS.minimumAmount)
-  ) {
-    discount = parseFloat(
-      (subtotal * ((discountSettings?.percentage ?? DEFAULT_DISCOUNT_SETTINGS.percentage) / 100)).toFixed(2),
-    );
-  }
-
-  const total = parseFloat((subtotal - discount).toFixed(2));
-
-  return {
-    items: sanitizedItems,
-    subtotal: parseFloat(subtotal.toFixed(2)),
-    discount,
-    total,
-  };
-};
+import {
+  calculateCartSummary,
+  DEFAULT_DISCOUNT_SETTINGS,
+} from './utils/cartPricing';
+import { incrementOfferUsage } from './services/firestoreService';
 
 const ScrollToTop = ({ enabled }) => {
   const location = useLocation();
@@ -255,6 +223,9 @@ function App() {
           if (jsonData.fishes) {
             jsonData.fishes = deduplicateFish(jsonData.fishes);
           }
+          if (!Array.isArray(jsonData.offers)) {
+            jsonData.offers = [];
+          }
           
           console.log('📦 Loaded fallback data from JSON:', jsonData.fishes?.length || 0);
           setFishData(jsonData);
@@ -319,42 +290,45 @@ function App() {
 
     const safeQuantity = normalizeQuantity(normalized);
 
-    // Import pricing utility to get promotional price
-    import('./utils/pricing').then(({ getPromotionalPrice }) => {
-      const promotionalPrice = getPromotionalPrice(fish, fishData.promotions);
-      
-      const existingItem = cart.find(item => item.id === fish.id);
-      if (existingItem) {
-        const combinedQuantity = normalizeQuantity(existingItem.quantity + safeQuantity);
+    // Financial unit price = catalog rate only.
+    // Legacy banner promo is display-only; cart discounts come from cartPricing.
+    const catalogUnitPrice = Number(fish.rate);
+    const unitPrice =
+      Number.isFinite(catalogUnitPrice) && catalogUnitPrice > 0 ? catalogUnitPrice : 0;
 
-        if (combinedQuantity > QUANTITY_LIMITS.MAX) {
-          addNotification('Update failed — please re-check quantity or try again.', 'error');
-          return;
-        }
+    const existingItem = cart.find((item) => item.id === fish.id);
+    if (existingItem) {
+      const combinedQuantity = normalizeQuantity(existingItem.quantity + safeQuantity);
 
-        setCart(
-          cart.map((item) =>
-            item.id === fish.id
-              ? {
-                  ...item,
-                  quantity: combinedQuantity,
-                }
-              : item,
-          ),
-        );
-      } else {
-        setCart([
-          ...cart,
-          {
-            ...fish,
-            quantity: safeQuantity,
-            price: promotionalPrice,
-            originalRate: fish.rate, // Keep original rate for reference
-          },
-        ]);
+      if (combinedQuantity > QUANTITY_LIMITS.MAX) {
+        addNotification('Update failed — please re-check quantity or try again.', 'error');
+        return false;
       }
-      addNotification(`${safeQuantity.toFixed(1)} kg ${fish.name} added to cart!`, 'success');
-    });
+
+      setCart(
+        cart.map((item) =>
+          item.id === fish.id
+            ? {
+                ...item,
+                quantity: combinedQuantity,
+                price: unitPrice,
+                rate: fish.rate,
+              }
+            : item,
+        ),
+      );
+    } else {
+      setCart([
+        ...cart,
+        {
+          ...fish,
+          quantity: safeQuantity,
+          price: unitPrice,
+          originalRate: fish.rate,
+        },
+      ]);
+    }
+    addNotification(`${safeQuantity.toFixed(1)} kg ${fish.name} added to cart!`, 'success');
 
     return true;
   };
@@ -395,9 +369,15 @@ function App() {
     console.log('Total price:', totalPrice);
 
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
-    const summary = calculateCartSummary(cartItems, discountSettings);
+    const offers = fishData?.offers || [];
+    const summary = calculateCartSummary(cartItems, discountSettings, offers);
 
-    if (Math.abs(summary.total - parseFloat(totalPrice)) > 0.01) {
+    // Compare via paise when available (avoids float drift)
+    const incomingPaise = Math.round(parseFloat(totalPrice) * 100);
+    if (
+      !Number.isFinite(incomingPaise) ||
+      Math.abs(summary.totalPaise - incomingPaise) > 0
+    ) {
       addNotification('Quantity or total mismatch detected — please review your cart before checkout.', 'error');
       restoreCartSnapshot();
       setShowCart(true);
@@ -429,9 +409,14 @@ function App() {
 
     const safeQuantity = normalizeQuantity(normalized);
     
-    // Create single item cart for checkout flow
+    // Create single item cart for checkout flow (offers may still apply; basket % off)
     const singleItemCart = [{ ...fish, quantity: safeQuantity, price: fish.rate }];
-    const summary = calculateCartSummary(singleItemCart, { ...DEFAULT_DISCOUNT_SETTINGS, isEnabled: false });
+    const offers = fishData?.offers || [];
+    const summary = calculateCartSummary(
+      singleItemCart,
+      { ...DEFAULT_DISCOUNT_SETTINGS, isEnabled: false },
+      offers,
+    );
     
     // Store cart data for checkout flow
     setCurrentCheckoutCart(summary.items);
@@ -454,15 +439,20 @@ function App() {
     }
 
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
+    const offers = fishData?.offers || [];
     // Recalculate from cart line items — do not trust a browser-edited total alone
-    const summary = calculateCartSummary(currentCheckoutCart, discountSettings);
+    const summary = calculateCartSummary(currentCheckoutCart, discountSettings, offers);
 
-    if (!summary.items.length || summary.total <= 0) {
+    if (!summary.items.length || summary.totalPaise <= 0) {
       addNotification('Unable to start payment — cart total is invalid.', 'error');
       return;
     }
 
-    if (Math.abs(summary.total - currentCheckoutSummary.total) > 0.01) {
+    const lockedPaise = currentCheckoutSummary?.totalPaise;
+    if (
+      Number.isFinite(lockedPaise) &&
+      Math.abs(summary.totalPaise - lockedPaise) > 0
+    ) {
       addNotification('Quantity or total mismatch detected — please review your cart before checkout.', 'error');
       restoreCartSnapshot();
       setShowCheckoutConfirmation(false);
@@ -475,13 +465,21 @@ function App() {
     const merchantUpiId = resolveMerchantUpiId(fishData?.shopInfo);
     const merchantName = resolveMerchantName(fishData?.shopInfo);
 
+    // Payment amount is locked from canonical calculateCartSummary — do not recompute elsewhere
     const session = {
       orderId,
       paymentRef,
       amount: summary.total,
+      amountPaise: summary.totalPaise,
       subtotal: summary.subtotal,
+      subtotalPaise: summary.subtotalPaise,
       discount: summary.discount,
+      discountPaise: summary.discountPaise,
       items: summary.items,
+      offerId: summary.offerId,
+      offerName: summary.offerName,
+      offerDiscount: summary.discountSource === 'offer' ? summary.discount : 0,
+      discountSource: summary.discountSource,
       merchantUpiId,
       merchantName,
       status: 'PENDING',
@@ -512,6 +510,7 @@ function App() {
   // User claims payment complete — store as PENDING_CONFIRMATION (not verified PAID)
   const handlePaymentDone = (transactionId, meta = {}) => {
     const deliveryInfo = JSON.parse(localStorage.getItem('currentOrderDeliveryInfo') || '{}');
+    // Always use locked payment-session amount — never recompute at claim time
     const lockedAmount = paymentSession?.amount ?? currentCheckoutTotal;
     const orderId = paymentSession?.orderId || `ORDER_${Date.now()}`;
     const paymentRef = paymentSession?.paymentRef || meta.paymentRef || createPaymentReference();
@@ -519,6 +518,13 @@ function App() {
     const orderSummary = {
       items: paymentSession?.items || currentCheckoutCart,
       totalPrice: lockedAmount,
+      amountPaise: paymentSession?.amountPaise ?? Math.round(Number(lockedAmount) * 100),
+      subtotal: paymentSession?.subtotal ?? currentCheckoutSummary?.subtotal,
+      discount: paymentSession?.discount ?? currentCheckoutSummary?.discount,
+      offerId: paymentSession?.offerId || null,
+      offerName: paymentSession?.offerName || null,
+      offerDiscount: paymentSession?.offerDiscount || 0,
+      discountSource: paymentSession?.discountSource || currentCheckoutSummary?.discountSource || 'none',
       deliveryInfo,
       transactionId,
       paymentRef,
@@ -532,6 +538,11 @@ function App() {
     const orders = JSON.parse(localStorage.getItem('orders') || '[]');
     orders.push(orderSummary);
     localStorage.setItem('orders', JSON.stringify(orders));
+
+    // Count offer use only after payment claim (same trust model as UTR entry)
+    if (paymentSession?.offerId) {
+      incrementOfferUsage(paymentSession.offerId).catch(() => {});
+    }
 
     setCart([]);
     setShowQRPayment(false);
@@ -675,6 +686,7 @@ function App() {
           onClose={() => setShowCheckoutConfirmation(false)}
           cart={currentCheckoutCart}
           totalPrice={currentCheckoutTotal}
+          orderSummary={currentCheckoutSummary}
           onProceedToPayment={(deliveryInfo) => {
             console.log('📞 App.jsx: onProceedToPayment callback called with deliveryInfo:', deliveryInfo);
             handleProceedToPayment(deliveryInfo);
@@ -704,7 +716,6 @@ function App() {
           isOpen={showTransactionSuccess.show}
           order={showTransactionSuccess.order}
           shopInfo={fishData?.shopInfo}
-          fishData={fishData}
           onClose={() => {
             setShowTransactionSuccess({ show: false, order: null });
             // Clean up temporary delivery info after modal is closed

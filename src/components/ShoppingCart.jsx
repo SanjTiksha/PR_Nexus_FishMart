@@ -3,6 +3,10 @@ import { X, ShoppingBag, Trash2 } from 'lucide-react';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import QuantityInput from './QuantityInput';
 import { calculateLineTotal, normalizeQuantity } from '../utils/quantityUtils';
+import {
+  calculateCartSummary,
+  DEFAULT_DISCOUNT_SETTINGS,
+} from '../utils/cartPricing';
 
 const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onClearCart, onCheckout, fishData }) => {
   const [isAnimating, setIsAnimating] = useState(false);
@@ -21,28 +25,15 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
     setInvalidItems({});
   }, [cart]);
 
-  const subtotal = useMemo(() => {
-    return cart.reduce((total, item) => {
-      const unitPrice = item.price || item.rate;
-      return total + calculateLineTotal(unitPrice, item.quantity);
-    }, 0);
-  }, [cart]);
+  const cartSummary = useMemo(() => {
+    const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
+    return calculateCartSummary(cart, discountSettings, fishData?.offers || []);
+  }, [cart, fishData?.discountSettings, fishData?.offers]);
 
-  const discount = useMemo(() => {
-    const discountSettings = fishData?.discountSettings || {
-      isEnabled: true,
-      percentage: 5,
-      minimumAmount: 1000,
-    };
-
-    if (discountSettings.isEnabled && subtotal >= discountSettings.minimumAmount) {
-      return parseFloat((subtotal * (discountSettings.percentage / 100)).toFixed(2));
-    }
-
-    return 0;
-  }, [subtotal, fishData?.discountSettings]);
-
-  const totalPrice = useMemo(() => parseFloat((subtotal - discount).toFixed(2)), [subtotal, discount]);
+  const subtotal = cartSummary.subtotal;
+  const discount = cartSummary.discount;
+  const totalPrice = cartSummary.total;
+  const appliedOffer = cartSummary.appliedOffer;
 
   const totalItems = useMemo(() => {
     return cart.reduce((total, item) => total + normalizeQuantity(item.quantity), 0);
@@ -172,7 +163,19 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
                 <span className="font-medium">₹{subtotal.toFixed(2)}</span>
               </div>
               
-              {discount > 0 && (
+              {discount > 0 && appliedOffer && (
+                <>
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Offer Discount:</span>
+                    <span className="font-medium">-₹{discount.toFixed(2)}</span>
+                  </div>
+                  <p className="text-xs text-green-700 bg-green-50 rounded-lg px-2 py-1.5">
+                    Best Offer Applied: {appliedOffer.title}
+                  </p>
+                </>
+              )}
+
+              {discount > 0 && !appliedOffer && (
                 <div className="flex justify-between text-sm text-green-600">
                   <span>Discount ({fishData?.discountSettings?.percentage || 5}% {fishData?.discountSettings?.description || "off ₹1000+"}):</span>
                   <span className="font-medium">-₹{discount.toFixed(2)}</span>

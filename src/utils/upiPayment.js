@@ -3,6 +3,8 @@
  * Builds NPCI-style upi://pay URIs and device detection for Android / iOS / desktop.
  */
 
+import { toPaise, formatPaiseAsRupees } from './moneyUtils';
+
 export const createPaymentReference = () => {
   const stamp = Date.now().toString(36).toUpperCase();
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -10,10 +12,11 @@ export const createPaymentReference = () => {
 };
 
 export const formatUpiAmount = (value) => {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return null;
+  // Canonical paise rounding — same money engine as cart/checkout
+  const paise = toPaise(value);
+  if (paise <= 0) return null;
   // Always 2 decimals (5.00) — banks/GPay accept this more reliably than bare "5"
-  return num.toFixed(2);
+  return formatPaiseAsRupees(paise);
 };
 
 /** Google Pay Android package — used to open GPay directly. */

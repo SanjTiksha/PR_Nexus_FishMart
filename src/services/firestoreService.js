@@ -11,7 +11,8 @@ import {
   orderBy,
   onSnapshot,
   writeBatch,
-  serverTimestamp
+  serverTimestamp,
+  increment
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import fishDataFallback from "../data/fishData.json";
@@ -66,7 +67,8 @@ const COLLECTIONS = {
   RATE_HISTORY: "rateHistory",
   SHOP_SETTING: "shopSetting",
   PROMOTION_AND_DISCOUNTS: "promotionAndDiscounts",
-  ADMIN_LOGS: "AdminLogs"
+  ADMIN_LOGS: "AdminLogs",
+  OFFERS: "offers"
 };
 
 /**
@@ -541,6 +543,15 @@ export const loadFishDataFromFirestore = async () => {
       console.log('⚠️ Could not load discountSettings, will use config fallback');
     }
 
+    // Load offers & promotions collection (optional — empty array if missing/unavailable)
+    let offers = [];
+    try {
+      offers = await loadOffersFromFirestore();
+    } catch (error) {
+      console.log('⚠️ Could not load offers, continuing with empty list');
+      offers = [];
+    }
+
     // Build data structure with new collections (preferred) or fallback to config
     const data = {
       fishes: fishes.length > 0 ? deduplicateFish(fishes) : (config?.fishes || fishDataFallback.fishes),
@@ -550,7 +561,8 @@ export const loadFishDataFromFirestore = async () => {
       // Promotions: prefer promotionBanner collection, fallback to config, then fallback JSON
       promotions: promotionBanner ? { ...promotionBanner } : (config?.promotions || fishDataFallback.promotions),
       // Discount settings: prefer discountSettings collection, fallback to config, then fallback JSON
-      discountSettings: discountSettings ? { ...discountSettings } : (config?.discountSettings || fishDataFallback.discountSettings)
+      discountSettings: discountSettings ? { ...discountSettings } : (config?.discountSettings || fishDataFallback.discountSettings),
+      offers: Array.isArray(offers) ? offers : []
     };
 
     // Ensure fishes are deduplicated
@@ -564,7 +576,8 @@ export const loadFishDataFromFirestore = async () => {
       reviews: data.reviews.length,
       hasShopInfo: !!data.shopInfo,
       hasPromotions: !!data.promotions,
-      hasDiscountSettings: !!data.discountSettings
+      hasDiscountSettings: !!data.discountSettings,
+      offers: data.offers?.length || 0
     });
     
     // Log source of data
@@ -1368,6 +1381,161 @@ export const subscribeToDiscountSettings = (callback) => {
     console.error("❌ Error subscribing to discount settings:", error);
     callback(null);
   });
+};
+
+/**
+ * Offers & Promotions Operations
+ * Collection: offers/{offerId}
+ */
+
+const sanitizeOfferPayload = (formData = {}) => {
+  const nowIso = new Date().toISOString();
+  const maxUsesRaw = formData.maxUses;
+  const maxUses =
+    maxUsesRaw === '' || maxUsesRaw === null || maxUsesRaw === undefined
+      ? null
+      : Number(maxUsesRaw);
+
+  const payload = {
+    title: String(formData.title || '').trim(),
+    description: String(formData.description || '').trim(),
+    type: formData.type || 'general',
+    bannerImage: String(formData.bannerImage || '').trim(),
+    discountType: formData.discountType === 'fixed' ? 'fixed' : 'percentage',
+    discountValue: Number(formData.discountValue) || 0,
+    minimumOrderAmount: Number(formData.minimumOrderAmount) || 0,
+    maximumDiscount: Number(formData.maximumDiscount) || 0,
+    applyTo: formData.applyTo || 'entire_store',
+    productIds: Array.isArray(formData.productIds)
+      ? formData.productIds.map(String)
+      : [],
+    categoryIds: Array.isArray(formData.categoryIds)
+      ? formData.categoryIds.map(String)
+      : [],
+    startDate: formData.startDate || '',
+    startTime: formData.startTime || '00:00',
+    endDate: formData.endDate || '',
+    endTime: formData.endTime || '23:59',
+    maxUses: Number.isFinite(maxUses) && maxUses > 0 ? maxUses : null,
+    enabled: formData.enabled !== false,
+    updatedAt: nowIso,
+  };
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) delete payload[key];
+  });
+
+  return payload;
+};
+
+export const loadOffersFromFirestore = async () => {
+  try {
+    const offersRef = collection(db, COLLECTIONS.OFFERS);
+    let snapshot;
+    try {
+      snapshot = await getDocs(query(offersRef, orderBy('createdAt', 'desc')));
+    } catch (orderError) {
+      // Fallback if createdAt index/order unavailable
+      console.warn('⚠️ Offers orderBy failed, loading unordered:', orderError.message);
+      snapshot = await getDocs(offersRef);
+    }
+
+    const offers = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+    console.log(`✅ Loaded ${offers.length} offers from Firestore`);
+    return offers;
+  } catch (error) {
+    console.error('❌ Error loading offers from Firestore:', error);
+    return [];
+  }
+};
+
+export const createOffer = async (formData) => {
+  try {
+    const payload = {
+      ...sanitizeOfferPayload(formData),
+      usedCount: 0,
+      createdAt: new Date().toISOString(),
+    };
+    const docRef = await addDoc(collection(db, COLLECTIONS.OFFERS), payload);
+    console.log('✅ Offer created:', docRef.id);
+    return { id: docRef.id, ...payload };
+  } catch (error) {
+    console.error('❌ Error creating offer:', error);
+    throw error;
+  }
+};
+
+export const updateOffer = async (offerId, formData) => {
+  try {
+    if (!offerId) throw new Error('Offer ID is required');
+    const payload = sanitizeOfferPayload(formData);
+    // Do not reset usedCount on edit
+    delete payload.usedCount;
+    await updateDoc(doc(db, COLLECTIONS.OFFERS, String(offerId)), payload);
+    console.log('✅ Offer updated:', offerId);
+    return { id: offerId, ...payload };
+  } catch (error) {
+    console.error('❌ Error updating offer:', error);
+    throw error;
+  }
+};
+
+export const setOfferEnabled = async (offerId, enabled) => {
+  try {
+    await updateDoc(doc(db, COLLECTIONS.OFFERS, String(offerId)), {
+      enabled: !!enabled,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ Error toggling offer:', error);
+    throw error;
+  }
+};
+
+/**
+ * Soft-delete preferred when offer was used on orders.
+ * Hard delete only when usedCount is 0.
+ */
+export const deleteOfferSafe = async (offer) => {
+  try {
+    if (!offer?.id) throw new Error('Offer ID is required');
+    const usedCount = Number(offer.usedCount) || 0;
+    if (usedCount > 0) {
+      await updateDoc(doc(db, COLLECTIONS.OFFERS, String(offer.id)), {
+        enabled: false,
+        archived: true,
+        updatedAt: new Date().toISOString(),
+      });
+      console.log('✅ Offer archived (was used):', offer.id);
+      return { action: 'archived', id: offer.id };
+    }
+    await deleteDoc(doc(db, COLLECTIONS.OFFERS, String(offer.id)));
+    console.log('✅ Offer deleted:', offer.id);
+    return { action: 'deleted', id: offer.id };
+  } catch (error) {
+    console.error('❌ Error deleting offer:', error);
+    throw error;
+  }
+};
+
+/** Increment usage after a successful order / payment claim. Client-side trust model. */
+export const incrementOfferUsage = async (offerId) => {
+  try {
+    if (!offerId) return false;
+    await updateDoc(doc(db, COLLECTIONS.OFFERS, String(offerId)), {
+      usedCount: increment(1),
+      updatedAt: new Date().toISOString(),
+    });
+    console.log('✅ Offer usage incremented:', offerId);
+    return true;
+  } catch (error) {
+    console.error('❌ Error incrementing offer usage:', error);
+    return false;
+  }
 };
 
 /**

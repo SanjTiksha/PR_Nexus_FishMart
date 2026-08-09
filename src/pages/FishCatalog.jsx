@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import EnhancedFishCard from '../components/EnhancedFishCard';
+import SpecialOffersSection from '../components/SpecialOffersSection';
 
 const FishCatalog = ({ fishData, addToCart, onBuyNow, toggleFavorite, favorites, cart, voiceSearchQuery }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,8 +58,13 @@ const FishCatalog = ({ fishData, addToCart, onBuyNow, toggleFavorite, favorites,
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-cyan-50 to-white pb-mobile-nav md:pb-8">
+      <SpecialOffersSection
+        fishData={fishData}
+        shopNowHref="#fish-catalog-list"
+        compact
+      />
       {/* Main Content with Sidebar Layout — fish list first */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
+        <div id="fish-catalog-list" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-3 sm:pt-3 sm:pb-6">
         <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 relative z-20">
           
           {/* Sidebar Filters - Desktop Only */}
