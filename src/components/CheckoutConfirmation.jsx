@@ -14,10 +14,12 @@ import { normalizeQuantity, calculateLineTotal } from '../utils/quantityUtils';
 import DeliveryLocationPicker from './DeliveryLocationPicker';
 import {
   ensureMsg91OtpReady,
+  isMsg91CaptchaVerified,
   isValidIndianMobile,
   maskMobile,
   MSG91_CAPTCHA_RENDER_ID,
   normalizeIndianMobile,
+  onMsg91CaptchaChange,
   retryMsg91Otp,
   sendMsg91Otp,
   toMsg91Identifier,
@@ -46,6 +48,9 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [resendingOtp, setResendingOtp] = useState(false);
   const [resendSeconds, setResendSeconds] = useState(0);
+  const [captchaReady, setCaptchaReady] = useState(false);
+  const [captchaSolved, setCaptchaSolved] = useState(false);
+  const [captchaInitError, setCaptchaInitError] = useState('');
 
   const otpInputRef = useRef(null);
   const mobileInputRef = useRef(null);
@@ -66,6 +71,9 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
       setOtpMessage('');
       setOtpError('');
       setResendSeconds(0);
+      setCaptchaReady(false);
+      setCaptchaSolved(false);
+      setCaptchaInitError('');
       reqIdRef.current = '';
       busyRef.current = false;
       setDeliveryInfo({
@@ -76,6 +84,45 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
       });
     }
   }, [isOpen]);
+
+  // Init MSG91 only when delivery form (and visible captcha mount) is shown.
+  // H-Captcha often fails if the mount node is display:none during init.
+  useEffect(() => {
+    if (!isOpen || !showDeliveryForm) return undefined;
+
+    let cancelled = false;
+    const unsub = onMsg91CaptchaChange((ok) => {
+      if (!cancelled) setCaptchaSolved(!!ok);
+    });
+
+    const timer = window.setTimeout(async () => {
+      try {
+        await ensureMsg91OtpReady();
+        if (cancelled) return;
+        setCaptchaReady(true);
+        setCaptchaInitError('');
+        setCaptchaSolved(isMsg91CaptchaVerified());
+      } catch (err) {
+        if (cancelled) return;
+        setCaptchaReady(false);
+        setCaptchaInitError(
+          err?.message || 'Captcha failed to load. Please refresh and try again.',
+        );
+      }
+    }, 80);
+
+    // Poll often — MSG91 may not flip isCaptchaVerified even when H-Captcha UI shows ✓
+    const poll = window.setInterval(() => {
+      if (!cancelled) setCaptchaSolved(isMsg91CaptchaVerified());
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      clearInterval(poll);
+      unsub();
+    };
+  }, [isOpen, showDeliveryForm]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return undefined;
@@ -145,6 +192,11 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
 
     try {
       await ensureMsg91OtpReady();
+      if (!isMsg91CaptchaVerified()) {
+        setOtpError('Please complete the captcha below, then click Verify Mobile.');
+        setCaptchaSolved(false);
+        return;
+      }
       const identifier = toMsg91Identifier(mobile);
       const result = await sendMsg91Otp(identifier);
       if (result.reqId) reqIdRef.current = String(result.reqId);
@@ -155,6 +207,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
       setOtpMessage('OTP sent successfully.');
       setResendSeconds(RESEND_SECONDS);
     } catch (err) {
+      setCaptchaSolved(isMsg91CaptchaVerified());
       setOtpError(err?.message || 'Could not send OTP. Please try again.');
       setShowOtpPanel(false);
     } finally {
@@ -409,7 +462,7 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                     />
                   </div>
 
-                  {/* Mobile + MSG91 OTP */}
+                  {/* Mobile + MSG91 OTP (H-Captcha must be visible before Verify Mobile) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       <Phone className="w-4 h-4 inline mr-1" />
@@ -434,13 +487,51 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                         <button
                           type="button"
                           onClick={handleSendOtp}
-                          disabled={sendingOtp || !deliveryInfo.mobileNumber}
+                          disabled={
+                            sendingOtp ||
+                            !deliveryInfo.mobileNumber ||
+                            deliveryInfo.mobileNumber.length !== 10 ||
+                            !captchaReady ||
+                            !captchaSolved
+                          }
                           className="min-h-[48px] px-3 sm:px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold whitespace-nowrap active:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-500"
+                          title={
+                            captchaSolved
+                              ? 'Send OTP'
+                              : 'Complete captcha first, then tap Verify Mobile'
+                          }
                         >
                           {sendingOtp ? 'Sending…' : 'Verify Mobile'}
                         </button>
                       )}
                     </div>
+
+                    {!isCurrentMobileVerified && (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                        <p className="text-sm font-semibold text-gray-800">Security check</p>
+                        <p className="text-xs text-gray-600">
+                          Complete the captcha, then tap Verify Mobile.
+                        </p>
+                        <div
+                          id={MSG91_CAPTCHA_RENDER_ID}
+                          className="min-h-[78px] flex justify-center items-center overflow-x-auto"
+                        />
+                        {captchaInitError && (
+                          <p className="text-xs text-red-600">{captchaInitError}</p>
+                        )}
+                        {!captchaInitError && captchaReady && (
+                          <p
+                            className={`text-xs font-medium ${
+                              captchaSolved ? 'text-green-700' : 'text-amber-800'
+                            }`}
+                          >
+                            {captchaSolved
+                              ? 'Captcha completed ✓ — you can verify mobile now.'
+                              : 'Waiting for captcha…'}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {isCurrentMobileVerified && (
                       <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
@@ -461,9 +552,6 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       <p className="mt-2 text-sm text-red-600">{otpError}</p>
                     )}
                   </div>
-
-                  {/* MSG91 captcha mount (only if widget has captcha enabled) */}
-                  <div id={MSG91_CAPTCHA_RENDER_ID} className="min-h-0" />
 
                   {/* Custom OTP panel — not MSG91 default popup */}
                   {showOtpPanel && !isCurrentMobileVerified && (
