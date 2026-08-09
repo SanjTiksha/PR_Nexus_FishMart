@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * Phase A admin Auth: Email/Password for management accounts only.
+     * No custom claims / Cloud Functions required.
+     */
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email in [
+          'support@prnexusgroup.com',
+          'info@prnexusgroup.com'
+        ];
+    }
+
+    // ---------- Catalog / storefront (public read) ----------
+
+    match /fishes/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /reviews/{docId} {
+      allow read: if true;
+      // Public may CREATE one review document only
+      allow create: if true;
+      // Public must NOT update or delete reviews
+      allow update, delete: if isAdmin();
+    }
+
+    match /offers/{docId} {
+      allow read: if true;
+      // No public usedCount (or any) updates — checkout treats increment as best-effort
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /shopSetting/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /promotionAndDiscounts/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /config/{docId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------- Admin-only operations ----------
+
+    match /daily/{docId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /rateHistory/{docId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /AdminLogs/{docId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    // Diagnostics probe — admin only (public load tolerates failure)
+    match /_test_connection/{docId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    // ---------- Customer orders ----------
+    // Unauthenticated customers may CREATE a new order document only.
+    // No public read / update / delete (prevents cross-customer access & payment tampering).
+
+    match /orders/{orderId} {
+      allow create: if
+        request.resource.data.orderId == orderId
+        && request.resource.data.paymentStatus == 'PENDING_CONFIRMATION'
+        && request.resource.data.paidVerified == false;
+
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ---------- Default deny ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

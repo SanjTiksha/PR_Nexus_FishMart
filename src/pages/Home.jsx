@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Reviews from '../components/Reviews';
 import SmartBanner from '../components/SmartBanner';
 import HeroSliderSimple from '../components/HeroSliderSimple';
@@ -10,10 +10,9 @@ const Home = ({ fishData, refreshFishData }) => {
   const featuredFishes = fishData.fishes
     .filter((fish) => fish.inStock !== false && fish.available !== false)
     .slice(0, 4);
-  const location = useLocation();
-  
-  // Check if user is admin (only through URL parameter for security)
-  const isAdmin = new URLSearchParams(location.search).get('admin') === 'true';
+
+  // Reviews admin tools only via Firebase-authenticated AdminPanel — not ?admin=true
+  const isAdmin = false;
 
   return (
     <div className="min-h-screen">
@@ -285,21 +284,17 @@ const Home = ({ fishData, refreshFishData }) => {
             </p>
             
           </div>
-          <Reviews 
-            isAdmin={isAdmin} 
-            reviews={fishData.reviews || []} 
-            onUpdateReviews={refreshFishData ? async (updatedReviews) => {
-              try {
-                // Update reviews directly in Firestore
-                const { updateReviews } = await import('../services/firestoreService');
-                await updateReviews(updatedReviews);
-                
-                // Refresh fish data from Firestore
+          <Reviews
+            isAdmin={isAdmin}
+            reviews={fishData.reviews || []}
+            onAddReview={async (review) => {
+              // Public: create ONE review only — never delete/rewrite the collection
+              const { addReview } = await import('../services/firestoreService');
+              await addReview(review);
+              if (refreshFishData) {
                 await refreshFishData();
-              } catch (error) {
-                console.error('Error updating reviews:', error);
               }
-            } : undefined} 
+            }}
           />
         </div>
       </section>

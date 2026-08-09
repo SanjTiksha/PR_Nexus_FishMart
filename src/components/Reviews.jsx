@@ -1,10 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Star, ThumbsUp, MessageCircle, Trash2 } from 'lucide-react';
 
-const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
-
+/**
+ * @param {object} props
+ * @param {boolean} [props.isAdmin] - Admin UI (delete controls). Home must pass false.
+ * @param {Array} [props.reviews]
+ * @param {(review: object) => void|Promise<void>} [props.onAddReview] - Public/safe create of ONE review
+ * @param {(reviews: Array) => void|Promise<void>} [props.onUpdateReviews] - Admin-only full list replace/delete
+ */
+const Reviews = ({
+  isAdmin = false,
+  reviews = [],
+  onAddReview,
+  onUpdateReviews,
+}) => {
   const [newReview, setNewReview] = useState({ name: '', rating: 5, comment: '' });
   const [showReviewForm, setShowReviewForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   // Newest reviews first (by date, then by id)
   const sortedReviews = useMemo(() => {
@@ -23,24 +36,46 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
     : 0;
   const totalReviews = sortedReviews.length;
 
-  const handleSubmitReview = (e) => {
+  const handleSubmitReview = async (e) => {
     e.preventDefault();
-    if (newReview.name && newReview.comment && onUpdateReviews) {
-      const review = {
-        id: Date.now(),
-        ...newReview,
-        date: new Date().toISOString().split('T')[0],
-        verified: false
-      };
-      onUpdateReviews([review, ...reviews]);
+    if (!newReview.name || !newReview.comment) return;
+
+    const review = {
+      id: Date.now(),
+      ...newReview,
+      date: new Date().toISOString().split('T')[0],
+      verified: false,
+    };
+
+    setIsSubmitting(true);
+    setSubmitError('');
+
+    try {
+      // Prefer create-one path (public storefront). Never pass a full rewrite list publicly.
+      if (onAddReview) {
+        await onAddReview(review);
+      } else if (isAdmin && onUpdateReviews) {
+        // Admin-only fallback: full list rewrite (AdminPanel)
+        await onUpdateReviews([review, ...reviews]);
+      } else {
+        setSubmitError('Unable to submit review right now.');
+        return;
+      }
+
       setNewReview({ name: '', rating: 5, comment: '' });
       setShowReviewForm(false);
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      setSubmitError('Unable to submit review. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteReview = (reviewId) => {
-    if (window.confirm('Are you sure you want to delete this review?') && onUpdateReviews) {
-      onUpdateReviews(reviews.filter(review => review.id !== reviewId));
+    if (!isAdmin || !onUpdateReviews) return;
+    if (window.confirm('Are you sure you want to delete this review?')) {
+      onUpdateReviews(reviews.filter((review) => review.id !== reviewId));
     }
   };
 
@@ -50,6 +85,7 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
         {[1, 2, 3, 4, 5].map((star) => (
           <button
             key={star}
+            type="button"
             onClick={interactive ? () => onRatingChange(star) : undefined}
             className={`${interactive ? 'cursor-pointer' : 'cursor-default'}`}
           >
@@ -80,6 +116,7 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
             )}
           </div>
           <button
+            type="button"
             onClick={() => setShowReviewForm(!showReviewForm)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
           >
@@ -99,8 +136,8 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
 
           <div className="space-y-2">
             {[5, 4, 3, 2, 1].map((rating) => {
-              const count = sortedReviews.filter(r => r.rating === rating).length;
-              const percentage = (count / totalReviews) * 100;
+              const count = sortedReviews.filter((r) => r.rating === rating).length;
+              const percentage = totalReviews ? (count / totalReviews) * 100 : 0;
               return (
                 <div key={rating} className="flex items-center space-x-2">
                   <span className="text-sm w-8">{rating}</span>
@@ -151,8 +188,8 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
-              {renderStars(newReview.rating, true, (rating) => 
-                setNewReview({ ...newReview, rating })
+              {renderStars(newReview.rating, true, (rating) =>
+                setNewReview({ ...newReview, rating }),
               )}
             </div>
             <div>
@@ -166,9 +203,16 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
                 required
               />
             </div>
+            {submitError && (
+              <p className="text-sm text-red-600">{submitError}</p>
+            )}
             <div className="flex space-x-3">
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
-                Submit Review
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {isSubmitting ? 'Submitting…' : 'Submit Review'}
               </button>
               <button
                 type="button"
@@ -185,17 +229,23 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
       {/* Reviews List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {sortedReviews.slice(0, isAdmin ? sortedReviews.length : 3).map((review) => (
-          <div key={review.id} className="review-card bg-white rounded-2xl shadow-md p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-300 border border-gray-200">
+          <div
+            key={review.id}
+            className="review-card bg-white rounded-2xl shadow-md p-6 flex flex-col justify-between hover:shadow-lg transition-all duration-300 border border-gray-200"
+          >
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold text-gray-900">{review.name}</h4>
                   {review.verified && (
-                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">✓ Verified</span>
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                      ✓ Verified
+                    </span>
                   )}
                 </div>
                 {isAdmin && (
                   <button
+                    type="button"
                     onClick={() => handleDeleteReview(review.id)}
                     className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
                     title="Delete Review"
@@ -212,11 +262,11 @@ const Reviews = ({ isAdmin = false, reviews = [], onUpdateReviews }) => {
             </div>
 
             <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
-              <button className="hover:text-blue-600 transition-colors flex items-center space-x-1">
+              <button type="button" className="hover:text-blue-600 transition-colors flex items-center space-x-1">
                 <ThumbsUp className="w-4 h-4" />
                 <span>Helpful</span>
               </button>
-              <button className="hover:text-blue-600 transition-colors flex items-center space-x-1">
+              <button type="button" className="hover:text-blue-600 transition-colors flex items-center space-x-1">
                 <MessageCircle className="w-4 h-4" />
                 <span>Reply</span>
               </button>
