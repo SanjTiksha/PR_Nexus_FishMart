@@ -11,8 +11,6 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
     customerName: '',
     mobileNumber: '',
     address: '',
-    landmark: '',
-    deliveryInstructions: '',
     location: null
   });
 
@@ -263,36 +261,6 @@ const CheckoutConfirmation = ({ isOpen, onClose, cart, totalPrice, onProceedToPa
                       className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                       placeholder="House/Flat No., Building, Street, City, Pincode"
                       required
-                    />
-                  </div>
-
-                  {/* Landmark */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Landmark
-                    </label>
-                    <input
-                      type="text"
-                      name="landmark"
-                      value={deliveryInfo.landmark}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      placeholder="Nearby landmark (optional)"
-                    />
-                  </div>
-
-                  {/* Delivery Instructions */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Delivery Instructions
-                    </label>
-                    <textarea
-                      name="deliveryInstructions"
-                      value={deliveryInfo.deliveryInstructions}
-                      onChange={handleInputChange}
-                      rows="2"
-                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      placeholder="Any special delivery instructions (optional)"
                     />
                   </div>
 

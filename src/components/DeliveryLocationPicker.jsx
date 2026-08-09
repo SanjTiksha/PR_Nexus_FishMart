@@ -24,6 +24,29 @@ export const buildMapsLinks = (lat, lng) => ({
 /**
  * Auto-detect GPS + allow manual pin move on map before confirming delivery location.
  */
+const isTouchDevice = () =>
+  typeof window !== 'undefined' &&
+  ('ontouchstart' in window || navigator.maxTouchPoints > 0 || L.Browser?.mobile);
+
+const setMapGesturesEnabled = (map, enabled) => {
+  if (!map) return;
+  if (enabled) {
+    map.dragging.enable();
+    map.touchZoom.enable();
+    map.doubleClickZoom.enable();
+    map.scrollWheelZoom.enable();
+    map.boxZoom.enable();
+    map.keyboard.enable();
+  } else {
+    map.dragging.disable();
+    map.touchZoom.disable();
+    map.doubleClickZoom.disable();
+    map.scrollWheelZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+  }
+};
+
 const DeliveryLocationPicker = ({ onChange }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -34,6 +57,8 @@ const DeliveryLocationPicker = ({ onChange }) => {
   const [error, setError] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [coords, setCoords] = useState(null);
+  // On mobile, map stays locked so the checkout sheet can scroll; unlock to drag/zoom
+  const [mapInteractive, setMapInteractive] = useState(() => !isTouchDevice());
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -72,6 +97,10 @@ const DeliveryLocationPicker = ({ onChange }) => {
       emitChange(newLat, newLng, null, false);
       setStatus('ready');
     });
+    // Keep pin fixed while map is locked (so scroll does not drag the marker)
+    if (isTouchDevice() && !map.dragging.enabled()) {
+      marker.dragging?.disable();
+    }
     markerRef.current = marker;
   }, [emitChange]);
 
@@ -114,10 +143,17 @@ const DeliveryLocationPicker = ({ onChange }) => {
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
+    const touch = isTouchDevice();
     const map = L.map(mapRef.current, {
       center: [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
       zoom: 16,
-      scrollWheelZoom: true
+      // Start locked on touch devices so page/modal scroll is not stolen by the map
+      dragging: !touch,
+      touchZoom: !touch,
+      scrollWheelZoom: !touch,
+      doubleClickZoom: !touch,
+      boxZoom: !touch,
+      keyboard: !touch,
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -125,6 +161,8 @@ const DeliveryLocationPicker = ({ onChange }) => {
     }).addTo(map);
 
     map.on('click', (e) => {
+      // Only place pin when map interaction is unlocked (desktop always unlocked)
+      if (touch && !map.dragging.enabled()) return;
       const { lat, lng } = e.latlng;
       setMarker(lat, lng);
       setConfirmed(false);
@@ -133,6 +171,8 @@ const DeliveryLocationPicker = ({ onChange }) => {
     });
 
     mapInstanceRef.current = map;
+    if (touch) setMapGesturesEnabled(map, false);
+
     const resizeTimers = [100, 350, 700].map((ms) =>
       setTimeout(() => map.invalidateSize(), ms)
     );
@@ -145,6 +185,17 @@ const DeliveryLocationPicker = ({ onChange }) => {
       markerRef.current = null;
     };
   }, [detectLocation, emitChange, setMarker]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !isTouchDevice()) return;
+    setMapGesturesEnabled(map, mapInteractive);
+    // Marker drag only when map is interactive
+    if (markerRef.current) {
+      if (mapInteractive) markerRef.current.dragging?.enable();
+      else markerRef.current.dragging?.disable();
+    }
+  }, [mapInteractive]);
 
   const handleConfirm = () => {
     if (!coords) {
@@ -184,7 +235,39 @@ const DeliveryLocationPicker = ({ onChange }) => {
         {status === 'idle' && 'Preparing map…'}
       </div>
 
-      <div ref={mapRef} className="w-full h-56 sm:h-52 mt-2 z-0 touch-manipulation" />
+      <div className="relative mt-2">
+        <div
+          ref={mapRef}
+          className={`w-full h-56 sm:h-52 z-0 ${mapInteractive ? 'touch-manipulation' : ''}`}
+          style={mapInteractive ? undefined : { touchAction: 'pan-y' }}
+        />
+
+        {/* Mobile: overlay so scrolling the checkout sheet works until user unlocks the map */}
+        {!mapInteractive && (
+          <button
+            type="button"
+            onClick={() => setMapInteractive(true)}
+            className="absolute inset-0 z-[500] flex flex-col items-center justify-center gap-1 bg-black/25 px-4 text-center"
+          >
+            <span className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow">
+              Tap to move map
+            </span>
+            <span className="text-xs text-white drop-shadow">
+              Scroll freely here · unlock only to adjust the pin
+            </span>
+          </button>
+        )}
+
+        {mapInteractive && isTouchDevice() && (
+          <button
+            type="button"
+            onClick={() => setMapInteractive(false)}
+            className="absolute top-2 right-2 z-[500] rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 shadow border border-gray-200"
+          >
+            Done moving map
+          </button>
+        )}
+      </div>
 
       <div className="p-3 space-y-2">
         {coords && (
