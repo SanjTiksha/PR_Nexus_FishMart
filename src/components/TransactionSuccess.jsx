@@ -86,40 +86,41 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
         </div>
 
         {/* Content */}
-        <div className="p-3 sm:p-5 space-y-3 sm:space-y-5 max-h-[78vh] overflow-y-auto">
-          {/* 1. Success header + Order Recorded / Payment Pending */}
-          <div className="text-center space-y-3">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600" />
+        <div className="p-3 sm:p-5 space-y-2.5 sm:space-y-5 max-h-[78vh] overflow-y-auto">
+          {/* 1. Compact success + status (mobile-first so WhatsApp CTA stays above the fold) */}
+          <div className="text-center space-y-2 sm:space-y-3">
+            {/* Extra large icon only on sm+ — keep mobile short */}
+            <div className="hidden sm:flex w-16 h-16 bg-green-100 rounded-full items-center justify-center mx-auto">
+              <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
             <div>
-              <h3 className="text-xl sm:text-2xl font-bold text-green-700 mb-1">
+              <h3 className="text-lg sm:text-2xl font-bold text-green-700 mb-0.5 sm:mb-1">
                 Order Submitted Successfully
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-xs sm:text-sm text-gray-600">
                 Your order has been recorded successfully.
               </p>
-              <p className="text-sm text-gray-600 mt-2 max-w-xl mx-auto">
+              <p className="hidden sm:block text-sm text-gray-600 mt-2 max-w-xl mx-auto">
                 Your payment and order details have been submitted. Our team will verify the payment and process your order shortly.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto text-left">
-              <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-green-900">Order</span>
-                <span className="text-sm font-semibold text-green-700 whitespace-nowrap">Recorded ✓</span>
+            <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto text-left">
+              <div className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                <span className="text-xs sm:text-sm font-medium text-green-900">Order</span>
+                <span className="text-xs sm:text-sm font-semibold text-green-700 whitespace-nowrap">Recorded ✓</span>
               </div>
               {isPendingConfirmation ? (
-                <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-orange-900">Payment</span>
-                  <span className="text-sm font-semibold text-orange-700 whitespace-nowrap">
+                <div className="rounded-xl border border-orange-200 bg-orange-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm font-medium text-orange-900">Payment</span>
+                  <span className="text-xs sm:text-sm font-semibold text-orange-700 leading-tight">
                     Pending Verification 🟠
                   </span>
                 </div>
               ) : (
-                <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-green-900">Payment</span>
-                  <span className="text-sm font-semibold text-green-700 whitespace-nowrap">
+                <div className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                  <span className="text-xs sm:text-sm font-medium text-green-900">Payment</span>
+                  <span className="text-xs sm:text-sm font-semibold text-green-700 whitespace-nowrap">
                     {paymentStatusLabel} ✓
                   </span>
                 </div>
@@ -127,39 +128,37 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
             </div>
 
             {order.orderId && (
-              <p className="text-xs text-gray-500">
+              <p className="text-[11px] sm:text-xs text-gray-500">
                 Order ID: <span className="font-mono text-blue-600">{order.orderId}</span>
               </p>
             )}
-            {order.transactionId && (
-              <p className="text-xs text-gray-500">UTR / Txn ID: {order.transactionId}</p>
-            )}
           </div>
 
-          {/* 2. WhatsApp CTA — prominent, near top (especially mobile) */}
-          <div className="rounded-2xl border-2 border-[#25D366] bg-[#E8F8EF] p-3 sm:p-4 space-y-2.5 shadow-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-base sm:text-lg font-bold text-gray-900">
-                📱 Send Your Order on WhatsApp
-              </h4>
-              <span className="inline-flex items-center rounded-md bg-[#25D366]/15 px-2 py-0.5 text-[11px] font-semibold text-[#128C7E]">
-                Recommended for faster processing
-              </span>
+          {/* 2. WhatsApp CTA — compact + prominent on mobile, single CTA on screen */}
+          <div className="rounded-xl sm:rounded-2xl border border-[#25D366]/70 bg-[#E8F8EF] px-3 py-2.5 sm:p-4 space-y-2 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h4 className="text-[15px] sm:text-base font-bold text-slate-900 leading-tight">
+                  📲 Send Order Details on WhatsApp
+                </h4>
+                <p className="mt-0.5 text-[11px] sm:text-xs font-semibold text-[#128C7E]">
+                  Recommended · Faster processing
+                </p>
+              </div>
             </div>
-            <p className="text-sm text-gray-700">
-              Your order is already recorded. Please send the order details on WhatsApp so our team can quickly receive and process your request.
+            <p className="text-xs sm:text-sm text-gray-700 leading-snug">
+              Your order is already recorded. Send the order details to our team on WhatsApp for faster processing.
             </p>
             <button
               type="button"
               onClick={handleWhatsAppShare}
-              className="w-full min-h-[52px] flex items-center justify-center space-x-2 py-3 px-4 bg-[#25D366] hover:bg-[#1ebe57] active:bg-[#128C7E] text-white rounded-xl font-bold text-base shadow-md"
+              className="w-full min-h-[48px] sm:min-h-[52px] flex items-center justify-center gap-2 py-2.5 px-4 bg-[#25D366] hover:bg-[#1ebe57] active:bg-[#128C7E] text-white rounded-xl font-bold text-sm sm:text-base shadow-md"
             >
-              <MessageCircle className="w-5 h-5" />
-              <span>💬 Send Order Details on WhatsApp</span>
+              <MessageCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
+              <span>Send Order Details on WhatsApp →</span>
             </button>
-            <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
-              <span className="font-semibold text-[#128C7E]">Recommended:</span>{' '}
-              Send your order details on WhatsApp for faster processing. Your order is already recorded even if you skip this step.
+            <p className="text-[11px] sm:text-xs text-center text-gray-500 leading-snug">
+              Optional — Your order is already recorded even if you skip WhatsApp.
             </p>
           </div>
 
