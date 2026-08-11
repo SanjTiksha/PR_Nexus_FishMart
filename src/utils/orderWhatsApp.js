@@ -8,6 +8,7 @@ import {
   getOrderFinancialBreakdown,
   formatOrderDiscountLabel,
 } from './orderFinancialDisplay';
+import { formatDeliveryPreferenceLabel, slotEmoji } from './deliverySlot';
 
 const formatOrderDate = (timestamp) => {
   if (!timestamp) return 'Not provided';
@@ -77,12 +78,17 @@ export const buildOrderWhatsAppMessage = (order, shopInfo = {}) => {
     }
   }
 
+  const deliveryPrefLabel = formatDeliveryPreferenceLabel(order);
+  const deliveryPrefLine = deliveryPrefLabel
+    ? `\n*Delivery:* ${slotEmoji(order?.deliverySlot || deliveryInfo.deliverySlot)} ${deliveryPrefLabel}`
+    : '';
+
   return `🐟 *Order Details* — PR Nexus FishMart
 
 *Order ID:* ${order?.orderId || 'Not provided'}
 *Customer:* ${deliveryInfo.customerName || 'Not provided'}
 *Mobile:* ${deliveryInfo.mobileNumber || 'Not provided'}
-*Date:* ${formatOrderDate(order?.timestamp || order?.createdAt)}
+*Date:* ${formatOrderDate(order?.timestamp || order?.createdAt)}${deliveryPrefLine}
 
 *Items Ordered:*
 ${orderSummary || '• No items'}${discountText}

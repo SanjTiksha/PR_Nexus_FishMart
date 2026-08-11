@@ -6,6 +6,7 @@ import {
   formatOrderDiscountLabel,
 } from '../utils/orderFinancialDisplay';
 import { getPaymentStatusLabel, openOrderWhatsApp } from '../utils/orderWhatsApp';
+import { formatDeliveryPreferenceLabel, slotEmoji } from '../utils/deliverySlot';
 
 const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopInfo }) => {
   const [isAnimating, setIsAnimating] = useState(false);
@@ -29,6 +30,7 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
   const discountLabel = formatOrderDiscountLabel(financial);
   const deliveryInfo = order.deliveryInfo || {};
   const paymentStatusLabel = getPaymentStatusLabel(order);
+  const deliveryPrefLabel = formatDeliveryPreferenceLabel(order);
 
   const formatDate = (timestamp) => {
     return new Date(timestamp).toLocaleDateString('en-IN', {
@@ -242,6 +244,14 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
                     <h4 className="font-semibold text-green-900">Delivery Information</h4>
                   </div>
                   <div className="space-y-2 text-sm">
+                    {deliveryPrefLabel && (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-green-700 font-medium">Delivery:</span>
+                        <span className="text-green-900 text-right font-semibold">
+                          {slotEmoji(order.deliverySlot || deliveryInfo.deliverySlot)} {deliveryPrefLabel}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between gap-2">
                       <span className="text-green-700 font-medium">Name:</span>
                       <span className="text-green-900 text-right">{order.deliveryInfo.customerName}</span>

@@ -25,6 +25,15 @@ import {
   toMsg91Identifier,
   verifyMsg91Otp,
 } from '../services/msg91Otp';
+import {
+  groupAvailableOptionsByDay,
+  isTodayDeliveryClosed,
+  normalizeDeliveryPreference,
+  normalizeSlot,
+  slotDisplayLabel,
+  slotEmoji,
+  validateDeliverySelection,
+} from '../utils/deliverySlot';
 
 const RESEND_SECONDS = 10;
 
@@ -35,9 +44,17 @@ const CheckoutConfirmation = ({
   totalPrice,
   orderSummary = null,
   onProceedToPayment,
+  deliveryPreference = null,
+  onDeliveryPreferenceChange,
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [deliverySlotError, setDeliverySlotError] = useState('');
+  const [availabilityTick, setAvailabilityTick] = useState(0);
+  const pref = normalizeDeliveryPreference(deliveryPreference);
+  // Recompute when the 30s availability tick advances
+  const dayGroups = groupAvailableOptionsByDay(availabilityTick ? new Date() : new Date());
+  const todayClosed = isTodayDeliveryClosed();
   const [deliveryInfo, setDeliveryInfo] = useState({
     customerName: '',
     mobileNumber: '',
@@ -81,6 +98,7 @@ const CheckoutConfirmation = ({
       setCaptchaReady(false);
       setCaptchaSolved(false);
       setCaptchaInitError('');
+      setDeliverySlotError('');
       reqIdRef.current = '';
       busyRef.current = false;
       setDeliveryInfo({
@@ -91,6 +109,28 @@ const CheckoutConfirmation = ({
       });
     }
   }, [isOpen]);
+
+  // Re-check cutoffs while checkout is open (do not silently switch slots)
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const id = window.setInterval(() => setAvailabilityTick((n) => n + 1), 30000);
+    return () => window.clearInterval(id);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const rawSlot = normalizeSlot(deliveryPreference?.deliverySlot);
+    if (!rawSlot) return;
+    const stillOk = validateDeliverySelection(
+      deliveryPreference?.deliveryDate,
+      deliveryPreference?.deliverySlot,
+    );
+    if (!stillOk.ok) {
+      setDeliverySlotError(stillOk.reason);
+    }
+    // availabilityTick forces re-eval against wall clock
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, deliveryPreference, availabilityTick]);
 
   // Init MSG91 only when delivery form (and visible captcha mount) is shown.
   // H-Captcha often fails if the mount node is display:none during init.
@@ -157,6 +197,15 @@ const CheckoutConfirmation = ({
   };
 
   const handleProceed = () => {
+    setDeliverySlotError('');
+    const locked = validateDeliverySelection(
+      deliveryPreference?.deliveryDate,
+      deliveryPreference?.deliverySlot,
+    );
+    if (!locked.ok) {
+      setDeliverySlotError(locked.reason);
+      return;
+    }
     setShowDeliveryForm(true);
   };
 
@@ -290,6 +339,16 @@ const CheckoutConfirmation = ({
 
   const handleDeliverySubmit = (e) => {
     e.preventDefault();
+    setDeliverySlotError('');
+
+    const locked = validateDeliverySelection(
+      deliveryPreference?.deliveryDate,
+      deliveryPreference?.deliverySlot,
+    );
+    if (!locked.ok) {
+      setDeliverySlotError(locked.reason);
+      return;
+    }
 
     if (!deliveryInfo.customerName || !deliveryInfo.mobileNumber || !deliveryInfo.address) {
       alert('Please fill in all required fields');
@@ -319,6 +378,8 @@ const CheckoutConfirmation = ({
         mobileNumber: mobile,
         mobileVerified: true,
         mobileVerifiedAt: new Date().toISOString(),
+        deliveryDate: locked.deliveryDate,
+        deliverySlot: locked.deliverySlot,
       });
     }
   };
@@ -414,6 +475,56 @@ const CheckoutConfirmation = ({
                     <div className="flex justify-between text-sm text-gray-600">
                       <span>Delivery</span>
                       <span>₹0</span>
+                    </div>
+                    <div className="rounded-xl border border-cyan-100 bg-sky-50/80 px-3 py-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-semibold text-slate-700">🚚 Delivery</span>
+                        <span className="text-[#087EA4] font-bold text-xs sm:text-sm">
+                          Choose time
+                        </span>
+                      </div>
+                      {todayClosed && (
+                        <p className="text-[11px] sm:text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                          Today&apos;s delivery slots are closed after 9:00 PM. Please choose Tomorrow.
+                        </p>
+                      )}
+                      <div className="space-y-2">
+                        {dayGroups.map((day) => (
+                          <div key={day.dateKey} className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-600">
+                              {day.dayLabel} · {day.dateShort}
+                            </p>
+                            <div className="inline-flex w-full rounded-lg border border-cyan-200 bg-white p-0.5">
+                              {day.slots.map((slot) => {
+                                const selected =
+                                  pref.deliveryDate === day.dateKey &&
+                                  normalizeSlot(pref.deliverySlot) === slot;
+                                return (
+                                  <button
+                                    key={`${day.dateKey}-${slot}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setDeliverySlotError('');
+                                      onDeliveryPreferenceChange?.(day.dateKey, slot);
+                                    }}
+                                    className={`flex-1 min-h-[40px] rounded-md text-xs font-bold transition-colors ${
+                                      selected
+                                        ? 'bg-[#087EA4] text-white'
+                                        : 'text-slate-700'
+                                    }`}
+                                    aria-pressed={selected}
+                                  >
+                                    {slotEmoji(slot)} {slotDisplayLabel(slot)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {deliverySlotError && (
+                        <p className="text-xs text-red-600 font-medium">{deliverySlotError}</p>
+                      )}
                     </div>
                     {orderSummary.appliedOffer?.title && (
                       <p className="text-xs text-green-700 bg-green-50 rounded-lg px-2 py-1.5">

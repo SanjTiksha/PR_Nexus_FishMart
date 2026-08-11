@@ -11,6 +11,7 @@ import {
 } from '../utils/orderFinancialDisplay';
 import { calculateLineTotal, normalizeQuantity } from '../utils/quantityUtils';
 import { getPaymentStatusLabel, openOrderWhatsApp } from '../utils/orderWhatsApp';
+import { formatDeliveryPreferenceAdmin, slotEmoji } from '../utils/deliverySlot';
 import AdminConfirmModal from './AdminConfirmModal';
 
 const PAYMENT_FILTERS = [
@@ -725,6 +726,17 @@ const OrderDetailsModal = ({
 
           <section className="bg-green-50 rounded-xl p-4 space-y-2">
             <h4 className="font-semibold text-gray-900">Delivery Information</h4>
+            {(order.deliveryDate ||
+              order.deliverySlot ||
+              delivery.deliveryDate ||
+              delivery.deliverySlot) && (
+              <Row
+                label="Delivery"
+                value={`${slotEmoji(order.deliverySlot || delivery.deliverySlot)} ${
+                  formatDeliveryPreferenceAdmin(order) || '—'
+                }`}
+              />
+            )}
             <Row label="Address" value={delivery.address || '—'} />
             {delivery.landmark && <Row label="Landmark" value={delivery.landmark} />}
             {delivery.deliveryInstructions && (

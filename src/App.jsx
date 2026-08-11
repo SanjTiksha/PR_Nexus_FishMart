@@ -37,6 +37,11 @@ import {
   DEFAULT_DISCOUNT_SETTINGS,
 } from './utils/cartPricing';
 import { createCustomerOrder, incrementOfferUsage } from './services/firestoreService';
+import {
+  normalizeDeliveryPreference,
+  normalizeSlot,
+  validateDeliverySelection,
+} from './utils/deliverySlot';
 
 const ScrollToTop = ({ enabled }) => {
   const location = useLocation();
@@ -92,6 +97,31 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useLocalStorage('shoppingCart', []);
   const [favorites, setFavorites] = useLocalStorage('favorites', []);
+  const [deliveryPreference, setDeliveryPreferenceRaw] = useLocalStorage(
+    'deliveryPreference',
+    normalizeDeliveryPreference(null),
+  );
+
+  // Drop expired selections (do not silently switch to another slot)
+  useEffect(() => {
+    const normalized = normalizeDeliveryPreference(deliveryPreference);
+    if (
+      normalized.deliveryDate !== deliveryPreference?.deliveryDate ||
+      normalizeSlot(normalized.deliverySlot) !== normalizeSlot(deliveryPreference?.deliverySlot)
+    ) {
+      setDeliveryPreferenceRaw(normalized);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh once on mount / calendar change
+  }, []);
+
+  const setDeliveryPreference = (dateKey, slot) => {
+    const result = validateDeliverySelection(dateKey, slot);
+    if (!result.ok) return;
+    setDeliveryPreferenceRaw({
+      deliveryDate: result.deliveryDate,
+      deliverySlot: result.deliverySlot,
+    });
+  };
   const [showCart, setShowCart] = useState(false);
   const [showVoiceSearch, setShowVoiceSearch] = useState(false);
   const [showPriceAlerts, setShowPriceAlerts] = useState(false);
@@ -437,6 +467,25 @@ function App() {
       return;
     }
 
+    const lockedPref = validateDeliverySelection(
+      deliveryInfo?.deliveryDate || deliveryPreference?.deliveryDate,
+      deliveryInfo?.deliverySlot || deliveryPreference?.deliverySlot,
+    );
+    if (!lockedPref.ok) {
+      addNotification(lockedPref.reason, 'error');
+      setDeliveryPreferenceRaw(
+        normalizeDeliveryPreference({
+          deliveryDate: deliveryInfo?.deliveryDate || deliveryPreference?.deliveryDate,
+          deliverySlot: deliveryInfo?.deliverySlot || deliveryPreference?.deliverySlot,
+        }),
+      );
+      return;
+    }
+    const pref = {
+      deliveryDate: lockedPref.deliveryDate,
+      deliverySlot: lockedPref.deliverySlot,
+    };
+
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
     const offers = fishData?.offers || [];
     // Recalculate from cart line items — do not trust a browser-edited total alone
@@ -481,6 +530,8 @@ function App() {
       discountSource: summary.discountSource,
       merchantUpiId,
       merchantName,
+      deliveryDate: pref.deliveryDate,
+      deliverySlot: pref.deliverySlot,
       status: 'PENDING',
       createdAt: new Date().toISOString(),
     };
@@ -499,9 +550,17 @@ function App() {
     });
 
     if (deliveryInfo) {
-      localStorage.setItem('currentOrderDeliveryInfo', JSON.stringify(deliveryInfo));
+      localStorage.setItem(
+        'currentOrderDeliveryInfo',
+        JSON.stringify({
+          ...deliveryInfo,
+          deliveryDate: pref.deliveryDate,
+          deliverySlot: pref.deliverySlot,
+        }),
+      );
     }
 
+    setDeliveryPreferenceRaw(pref);
     setShowCheckoutConfirmation(false);
     setShowQRPayment(true);
   };
@@ -510,10 +569,46 @@ function App() {
   // WhatsApp is never part of this path; success only after a successful write.
   const handlePaymentDone = async (transactionId, meta = {}) => {
     const deliveryInfo = JSON.parse(localStorage.getItem('currentOrderDeliveryInfo') || '{}');
+    const lockedPref = validateDeliverySelection(
+      deliveryInfo.deliveryDate ||
+        paymentSession?.deliveryDate ||
+        deliveryPreference?.deliveryDate,
+      deliveryInfo.deliverySlot ||
+        paymentSession?.deliverySlot ||
+        deliveryPreference?.deliverySlot,
+    );
+
+    if (!lockedPref.ok) {
+      addNotification(lockedPref.reason, 'error', 8000);
+      setDeliveryPreferenceRaw(
+        normalizeDeliveryPreference({
+          deliveryDate:
+            deliveryInfo.deliveryDate ||
+            paymentSession?.deliveryDate ||
+            deliveryPreference?.deliveryDate,
+          deliverySlot:
+            deliveryInfo.deliverySlot ||
+            paymentSession?.deliverySlot ||
+            deliveryPreference?.deliverySlot,
+        }),
+      );
+      return { success: false, error: new Error(lockedPref.reason) };
+    }
+    const pref = {
+      deliveryDate: lockedPref.deliveryDate,
+      deliverySlot: lockedPref.deliverySlot,
+    };
+
     // Always use locked payment-session amount — never recompute at claim time
     const lockedAmount = paymentSession?.amount ?? currentCheckoutTotal;
     const orderId = paymentSession?.orderId || `ORDER_${Date.now()}`;
     const paymentRef = paymentSession?.paymentRef || meta.paymentRef || createPaymentReference();
+
+    const {
+      deliveryDate: _dd,
+      deliverySlot: _ds,
+      ...customerDelivery
+    } = deliveryInfo;
 
     const orderSummary = {
       items: paymentSession?.items || currentCheckoutCart,
@@ -525,7 +620,10 @@ function App() {
       offerName: paymentSession?.offerName || null,
       offerDiscount: paymentSession?.offerDiscount || 0,
       discountSource: paymentSession?.discountSource || currentCheckoutSummary?.discountSource || 'none',
-      deliveryInfo,
+      deliveryInfo: customerDelivery,
+      // Canonical delivery preference (order-level; optional on legacy orders)
+      deliveryDate: pref.deliveryDate,
+      deliverySlot: pref.deliverySlot,
       transactionId,
       paymentRef,
       paymentStatus: 'PENDING_CONFIRMATION',
@@ -662,6 +760,8 @@ function App() {
           cart={currentCheckoutCart}
           totalPrice={currentCheckoutTotal}
           orderSummary={currentCheckoutSummary}
+          deliveryPreference={deliveryPreference}
+          onDeliveryPreferenceChange={setDeliveryPreference}
           onProceedToPayment={(deliveryInfo) => {
             console.log('📞 App.jsx: onProceedToPayment callback called with deliveryInfo:', deliveryInfo);
             handleProceedToPayment(deliveryInfo);

@@ -2,7 +2,15 @@ import { useState, useMemo, useEffect } from 'react';
 import EnhancedFishCard from '../components/EnhancedFishCard';
 import SpecialOffersSection from '../components/SpecialOffersSection';
 
-const FishCatalog = ({ fishData, addToCart, onBuyNow, toggleFavorite, favorites, cart, voiceSearchQuery }) => {
+const FishCatalog = ({
+  fishData,
+  addToCart,
+  onBuyNow,
+  toggleFavorite,
+  favorites,
+  cart,
+  voiceSearchQuery,
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('name');
@@ -284,12 +292,11 @@ const FishCatalog = ({ fishData, addToCart, onBuyNow, toggleFavorite, favorites,
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between gap-2 mb-3 px-0.5">
+              <div className="mb-3 px-0.5">
                 <h2 className="text-sm sm:text-base font-bold text-gray-800 truncate">
                   🐟 Fresh Catch
                   <span className="font-medium text-gray-500"> · {filteredFishes.length} available</span>
                 </h2>
-                <span className="hidden sm:inline text-xs text-gray-400 shrink-0">Daily delivery</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 px-0 sm:px-2">
