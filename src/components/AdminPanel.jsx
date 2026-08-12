@@ -1393,7 +1393,7 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
                     name="text"
                     defaultValue={fishData.promotions.text}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                    placeholder="e.g., 🎉 Weekend Offer: 10% Off on Surmai!"
+                    placeholder="e.g., 🎉 Weekend Offer: 5% Off on Surmai!"
                     required
                   />
                 </div>

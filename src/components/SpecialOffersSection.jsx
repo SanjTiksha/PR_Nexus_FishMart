@@ -82,9 +82,12 @@ const SpecialOffersSection = ({
   const discountLabel = formatOfferDiscountLabel(primary);
   const applicability = getApplicabilityNote(primary, fishData?.fishes || []);
   const terms = getTermsLine(primary);
-  const supportingText =
-    primary.description?.trim() ||
-    'Fresh fish delivered fresh to your door.';
+  // Keep admin copy, but sync any "N% OFF" token to the offer's real discount
+  // so stale text (e.g. 10% in description while discountValue is 5) never shows.
+  const rawDescription = primary.description?.trim() || '';
+  const supportingText = rawDescription
+    ? rawDescription.replace(/\d+\s*%\s*OFF/gi, discountLabel)
+    : `Get ${discountLabel} on your first order. Fresh fish delivered to your door!`;
   const bannerFromOffer = String(primary.bannerImage || '').trim();
   const visualSrc = bannerFromOffer || DEFAULT_OFFER_VISUAL;
   const visualAlt = bannerFromOffer
