@@ -383,7 +383,7 @@
 }
 
 .fm-header-logo,
-.fm-header-logo-mark,
+.fm-header-logo-img,
 .fm-header-whatsapp,
 .fm-header-cart,
 .fm-header-tap,
@@ -393,6 +393,30 @@
     box-shadow 200ms ease-out,
     color 180ms ease-out,
     background-color 180ms ease-out;
+}
+
+/* Header brand lockup — keep aspect ratio within fixed header height */
+.fm-header-logo-img {
+  display: block;
+  height: 44px;
+  width: auto;
+  max-width: min(100%, 210px);
+  object-fit: contain;
+  object-position: left center;
+}
+
+@media (min-width: 640px) {
+  .fm-header-logo-img {
+    height: 52px;
+    max-width: min(100%, 260px);
+  }
+}
+
+@media (min-width: 768px) {
+  .fm-header-logo-img {
+    height: 56px;
+    max-width: 300px;
+  }
 }
 
 .fm-mobile-nav-link {
@@ -442,9 +466,8 @@
     transform: translateY(-1px);
   }
 
-  .fm-header-logo:hover .fm-header-logo-mark {
+  .fm-header-logo:hover .fm-header-logo-img {
     transform: scale(1.02) translateY(-1px);
-    box-shadow: 0 6px 14px rgba(8, 126, 164, 0.22);
   }
 
   .fm-header-whatsapp:hover {
@@ -470,7 +493,7 @@
   .fm-nav-link-label,
   .fm-nav-link-underline,
   .fm-header-logo,
-  .fm-header-logo-mark,
+  .fm-header-logo-img,
   .fm-header-whatsapp,
   .fm-header-cart,
   .fm-header-tap,
@@ -480,7 +503,7 @@
 
   .fm-nav-link:hover .fm-nav-link-label,
   .fm-nav-link--active:hover .fm-nav-link-label,
-  .fm-header-logo:hover .fm-header-logo-mark,
+  .fm-header-logo:hover .fm-header-logo-img,
   .fm-header-whatsapp:hover,
   .fm-header-cart:hover,
   .fm-header-tap:active,

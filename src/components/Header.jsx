@@ -21,24 +21,20 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
     <header className="fm-header sticky top-0 z-50 bg-white border-b border-slate-200/80 shadow-sm overflow-x-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-[64px] sm:h-[72px] min-h-0">
-          {/* Logo */}
+          {/* Logo — brand lockup image (name + tagline included in asset) */}
           <Link
             to="/"
-            className="fm-header-logo flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 mr-2 sm:mr-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40 focus-visible:ring-offset-2 rounded-lg"
+            className="fm-header-logo flex items-center min-w-0 flex-1 mr-2 sm:mr-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40 focus-visible:ring-offset-2 rounded-lg"
+            aria-label={shopInfo?.name || 'PR Nexus FishMart'}
           >
-            <div className="fm-header-logo-mark relative flex-shrink-0 w-10 h-10 sm:w-11 sm:h-11 bg-gradient-to-br from-[#087EA4] to-[#0B9B9B] rounded-xl flex items-center justify-center shadow-md">
-              <span className="text-white text-lg sm:text-xl leading-none" aria-hidden="true">
-                🐟
-              </span>
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-xl font-bold text-[#0c4a6e] truncate leading-tight">
-                {shopInfo.name}
-              </h1>
-              <p className="hidden sm:block text-[10px] sm:text-xs text-[#087EA4] font-medium mt-0.5 truncate">
-                🌅 Fresh Every Morning
-              </p>
-            </div>
+            <img
+              src="/images/logo.png"
+              alt={shopInfo?.name || 'PR Nexus FishMart'}
+              className="fm-header-logo-img"
+              width={703}
+              height={228}
+              decoding="async"
+            />
           </Link>
 
           {/* Desktop Navigation */}
