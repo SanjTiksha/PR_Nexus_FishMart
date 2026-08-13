@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import EnhancedFishCard from '../components/EnhancedFishCard';
 import SpecialOffersSection from '../components/SpecialOffersSection';
 import FreeDeliveryBenefit from '../components/FreeDeliveryBenefit';
+import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 
 const FishCatalog = ({
   fishData,
@@ -72,7 +73,9 @@ const FishCatalog = ({
         shopNowHref="#fish-catalog-list"
         compact
       />
-      <FreeDeliveryBenefit />
+      {normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge) === 0 && (
+        <FreeDeliveryBenefit />
+      )}
       {/* Main Content with Sidebar Layout — fish list first */}
         <div id="fish-catalog-list" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-2 pb-3 sm:pt-3 sm:pb-6">
         <div className="flex flex-col lg:flex-row gap-4 lg:gap-8 relative z-20">

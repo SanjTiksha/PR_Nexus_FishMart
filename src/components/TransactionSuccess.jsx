@@ -222,6 +222,11 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
                       </div>
                     )}
 
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Delivery:</span>
+                      <span className="font-medium">₹{Number(financial.deliveryCharge || 0).toFixed(2)}</span>
+                    </div>
+
                     <div className="flex items-center justify-between text-sm font-semibold border-t border-blue-200 pt-1">
                       <span className="text-gray-900">Total:</span>
                       <span className="text-green-700">

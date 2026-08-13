@@ -6,6 +6,7 @@ import SpecialOffersSection from '../components/SpecialOffersSection';
 import FreeDeliveryBenefit from '../components/FreeDeliveryBenefit';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import { COMPANY_EMAILS, mailto } from '../data/companyEmails';
+import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 
 const Home = ({ fishData, refreshFishData }) => {
   const featuredFishes = fishData.fishes
@@ -34,7 +35,9 @@ const Home = ({ fishData, refreshFishData }) => {
       </section>
 
       <SpecialOffersSection fishData={fishData} shopNowTo="/" />
-      <FreeDeliveryBenefit />
+      {normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge) === 0 && (
+        <FreeDeliveryBenefit />
+      )}
 
       {/* Brand / Company Hero Content */}
       <section className="py-12 sm:py-16 bg-gradient-to-b from-white via-blue-50 to-cyan-50">

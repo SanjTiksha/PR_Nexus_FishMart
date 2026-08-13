@@ -473,8 +473,8 @@ const CheckoutConfirmation = ({
                       </div>
                     )}
                     <div className="flex justify-between text-sm text-gray-600">
-                      <span>Delivery</span>
-                      <span>₹0</span>
+                      <span>Delivery Charges</span>
+                      <span>₹{Number(orderSummary.deliveryCharge || 0).toFixed(2)}</span>
                     </div>
                     <div className="rounded-xl border border-cyan-100 bg-sky-50/80 px-3 py-2.5 space-y-2">
                       <div className="flex items-center justify-between gap-2 text-sm">

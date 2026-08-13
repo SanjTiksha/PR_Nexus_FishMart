@@ -9,7 +9,7 @@
  * Legacy Promotion Banner never changes cart unit price; discounts apply only
  * via calculateCartSummary (offer XOR basket).
  */
-import { lineTotalPaise, fromPaise, toPaise, lineTotalRupees } from '../src/utils/moneyUtils.js';
+import { lineTotalPaise, fromPaise, toPaise, lineTotalRupees, normalizeDeliveryChargeRupees, parseAdminDeliveryCharge } from '../src/utils/moneyUtils.js';
 import { calculateCartSummary } from '../src/utils/cartPricing.js';
 import { formatUpiAmount } from '../src/utils/upiPayment.js';
 import { getCatalogUnitPrice, getPromotionalPrice } from '../src/utils/pricing.js';
@@ -484,6 +484,132 @@ assert(
     order25.subtotal === 1000,
   '25) order.totalPrice = session.amount = paise→₹ = UPI for offer order',
   JSON.stringify({ order25, upi25, paiseAsRupees }),
+);
+
+// ---------------------------------------------------------------------------
+// 26–35) DELIVERY CHARGE — added AFTER discount; missing/invalid = ₹0
+// ---------------------------------------------------------------------------
+assert(normalizeDeliveryChargeRupees(undefined) === 0, '26a) missing deliveryCharge → ₹0');
+assert(normalizeDeliveryChargeRupees(null) === 0, '26b) null deliveryCharge → ₹0');
+assert(normalizeDeliveryChargeRupees('') === 0, '26c) blank deliveryCharge → ₹0');
+assert(normalizeDeliveryChargeRupees(-10) === 0, '26d) negative deliveryCharge → ₹0 (read path)');
+assert(normalizeDeliveryChargeRupees('abc') === 0, '26e) non-numeric deliveryCharge → ₹0 (read path)');
+assert(normalizeDeliveryChargeRupees(40) === 40, '26f) Admin 40 → ₹40');
+assert(normalizeDeliveryChargeRupees(0) === 0, '26g) Admin 0 → ₹0');
+assert(parseAdminDeliveryCharge(-10).ok === false, '26h) Admin rejects negative');
+assert(parseAdminDeliveryCharge('abc').ok === false, '26i) Admin rejects non-numeric');
+assert(parseAdminDeliveryCharge('').ok === true && parseAdminDeliveryCharge('').value === 0, '26j) Admin blank → 0');
+assert(parseAdminDeliveryCharge(40).ok === true && parseAdminDeliveryCharge(40).value === 40, '26k) Admin 40 accepted');
+
+const cart400 = [{ id: 1, price: 400, quantity: 1 }];
+const offer5pct = [baseOffer({ discountType: 'percentage', discountValue: 5 })];
+
+const s27 = calculateCartSummary(cart400, noBasket, offer5pct, now, 0);
+assert(
+  s27.subtotal === 400 &&
+    s27.discount === 20 &&
+    s27.deliveryCharge === 0 &&
+    s27.total === 380 &&
+    s27.totalPaise === 38000,
+  '27) ₹400 + ₹20 discount + ₹0 delivery = ₹380',
+  JSON.stringify(s27),
+);
+
+const s28 = calculateCartSummary(cart400, noBasket, offer5pct, now, 40);
+assert(
+  s28.subtotal === 400 &&
+    s28.discount === 20 &&
+    s28.deliveryCharge === 40 &&
+    s28.deliveryChargePaise === 4000 &&
+    s28.total === 420 &&
+    s28.totalPaise === 42000,
+  '28) ₹400 + ₹20 discount + ₹40 delivery = ₹420',
+  JSON.stringify(s28),
+);
+
+assert(
+  s28.discount === s27.discount,
+  '29) delivery is not discounted (offer stays ₹20)',
+  `d0=${s27.discount} d40=${s28.discount}`,
+);
+
+const fourArgNow = calculateCartSummary(cart400, noBasket, offer5pct, now);
+assert(
+  fourArgNow.deliveryCharge === 0 && fourArgNow.total === 380,
+  '30) 4th arg remains `now`; omitted 5th arg defaults delivery to ₹0',
+  JSON.stringify(fourArgNow),
+);
+
+const session28 = {
+  amount: s28.total,
+  amountPaise: s28.totalPaise,
+  deliveryCharge: s28.deliveryCharge,
+  deliveryChargePaise: s28.deliveryChargePaise,
+};
+const upi28 = formatUpiAmount(session28.amount);
+const order28 = {
+  totalPrice: session28.amount,
+  amountPaise: session28.amountPaise,
+  subtotal: s28.subtotal,
+  discount: s28.discount,
+  deliveryCharge: session28.deliveryCharge,
+  deliveryChargePaise: session28.deliveryChargePaise,
+};
+assert(
+  s28.total === session28.amount &&
+    session28.amountPaise === 42000 &&
+    upi28 === '420.00' &&
+    order28.totalPrice === 420 &&
+    order28.deliveryCharge === 40 &&
+    order28.deliveryChargePaise === 4000,
+  '31) Cart total = checkout payable = UPI = order total (₹420) with snapshot charge',
+  JSON.stringify({ s28: s28.total, upi28, order28 }),
+);
+
+const buyNow28 = calculateCartSummary(
+  cart400,
+  { ...noBasket, isEnabled: false },
+  offer5pct,
+  now,
+  40,
+);
+assert(
+  buyNow28.total === 420 && buyNow28.deliveryCharge === 40 && buyNow28.discount === 20,
+  '32) Buy Now uses same delivery charge as cart checkout',
+  JSON.stringify(buyNow28),
+);
+
+assert(
+  s27.totalPaise !== s28.totalPaise,
+  '33) mid-checkout Admin 0→40 is detected (locked 38000 ≠ live 42000)',
+  `locked=${s27.totalPaise} live=${s28.totalPaise}`,
+);
+
+const oldOrder = getOrderFinancialBreakdown({
+  totalPrice: 380,
+  subtotal: 400,
+  discount: 20,
+});
+assert(
+  oldOrder.deliveryCharge === 0 && oldOrder.total === 380 && oldOrder.subtotal === 400,
+  '34) old order missing deliveryCharge → ₹0; original total unchanged',
+  JSON.stringify(oldOrder),
+);
+
+const newOrderDisplay = getOrderFinancialBreakdown(order28);
+assert(
+  newOrderDisplay.deliveryCharge === 40 && newOrderDisplay.total === 420,
+  '35) new order snapshot displays deliveryCharge ₹40',
+  JSON.stringify(newOrderDisplay),
+);
+
+assert(
+  s27.deliveryCharge === 0,
+  '36) FREE DELIVERY visibility: charge === 0',
+);
+assert(
+  s28.deliveryCharge > 0,
+  '37) FREE DELIVERY hidden when charge > 0',
 );
 
 console.log('\n========================================');

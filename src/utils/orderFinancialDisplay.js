@@ -13,13 +13,14 @@ const toMoney = (value) => {
 
 /**
  * @param {object} order - Stored order snapshot
- * @returns {{ subtotal: number, discount: number, total: number, offerName: string|null, offerId: string|null, discountSource: string|null, hasSnapshot: boolean }}
+ * @returns {{ subtotal: number, discount: number, deliveryCharge: number, total: number, offerName: string|null, offerId: string|null, discountSource: string|null, hasSnapshot: boolean }}
  */
 export const getOrderFinancialBreakdown = (order) => {
   if (!order || typeof order !== 'object') {
     return {
       subtotal: 0,
       discount: 0,
+      deliveryCharge: 0,
       total: 0,
       offerName: null,
       offerId: null,
@@ -37,10 +38,12 @@ export const getOrderFinancialBreakdown = (order) => {
 
   const subtotal = hasSnapshot ? subtotalSnap : total;
   const discount = hasSnapshot ? discountSnap : 0;
+  const deliveryCharge = toMoney(order.deliveryCharge) ?? 0;
 
   return {
     subtotal,
     discount,
+    deliveryCharge,
     total,
     offerName: order.offerName || null,
     offerId: order.offerId || null,

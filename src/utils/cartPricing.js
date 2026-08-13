@@ -20,6 +20,7 @@ import {
   percentageOfPaise,
   clampDiscountPaise,
   payablePaise,
+  normalizeDeliveryChargeRupees,
 } from './moneyUtils';
 import {
   isOfferActive,
@@ -138,12 +139,15 @@ export const getBestOfferForCart = (items, offers = [], now = new Date()) => {
 
 /**
  * Canonical cart summary — sole source for cart / checkout / payment amounts.
+ * Delivery is a separate add-on AFTER offer/basket discount (5th argument).
+ * 4th argument remains `now` so existing callers stay valid.
  */
 export const calculateCartSummary = (
   cartItems = [],
   discountSettings = DEFAULT_DISCOUNT_SETTINGS,
   offers = [],
   now = new Date(),
+  deliveryCharge = 0,
 ) => {
   const items = sanitizeCartItems(cartItems);
   const subtotalPaise = sumLinePaise(items);
@@ -170,34 +174,42 @@ export const calculateCartSummary = (
   }
 
   discountPaise = clampDiscountPaise(discountPaise, subtotalPaise);
-  const totalPaise = payablePaise(subtotalPaise, discountPaise);
+  const deliveryRupees = normalizeDeliveryChargeRupees(deliveryCharge);
+  const deliveryPaise = toPaise(deliveryRupees);
+  const totalPaise = payablePaise(subtotalPaise, discountPaise, deliveryPaise);
 
   const subtotal = fromPaise(subtotalPaise);
   const discount = fromPaise(discountPaise);
+  const delivery = fromPaise(deliveryPaise);
   const total = fromPaise(totalPaise);
 
-  // Hard financial invariants
+  // Hard financial invariants (delivery may make total > subtotal)
   if (
     !Number.isFinite(subtotal) ||
     !Number.isFinite(discount) ||
+    !Number.isFinite(delivery) ||
     !Number.isFinite(total) ||
     discount < 0 ||
+    delivery < 0 ||
     total < 0 ||
     discount > subtotal + 1e-9 ||
-    total > subtotal + 1e-9
+    totalPaise !== payablePaise(subtotalPaise, discountPaise, deliveryPaise)
   ) {
     console.error('[cartPricing] Invalid money result', {
       subtotalPaise,
       discountPaise,
+      deliveryPaise,
       totalPaise,
     });
     return {
       items,
       subtotal: fromPaise(subtotalPaise),
       discount: 0,
+      deliveryCharge: 0,
       total: fromPaise(subtotalPaise),
       subtotalPaise,
       discountPaise: 0,
+      deliveryChargePaise: 0,
       totalPaise: subtotalPaise,
       appliedOffer: null,
       discountSource: 'none',
@@ -210,9 +222,11 @@ export const calculateCartSummary = (
     items,
     subtotal,
     discount,
+    deliveryCharge: delivery,
     total,
     subtotalPaise,
     discountPaise,
+    deliveryChargePaise: deliveryPaise,
     totalPaise,
     appliedOffer,
     discountSource,

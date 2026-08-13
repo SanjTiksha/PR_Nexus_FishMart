@@ -25,6 +25,7 @@ import {
 import BulkRateUpdateForm from './BulkRateUpdateForm';
 import AdminOffers from './AdminOffers';
 import AdminOrders from './AdminOrders';
+import { parseAdminDeliveryCharge, normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 
 const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
   const [activeTab, setActiveTab] = useState('fishes');
@@ -941,6 +942,15 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
                       delete payload[key];
                     }
                   });
+
+                  const parsedDelivery = parseAdminDeliveryCharge(
+                    formData.get('deliveryCharge'),
+                  );
+                  if (!parsedDelivery.ok) {
+                    alert('Delivery Charge must be a number of ₹0 or more.');
+                    return;
+                  }
+                  payload.deliveryCharge = parsedDelivery.value;
                   
                   // Save to Firestore using dynamic mapping
                   await saveShopSetting(payload);
@@ -1172,6 +1182,20 @@ const AdminPanel = ({ fishData, refreshFishData, onLogout }) => {
                     defaultValue={fishData.shopInfo.workingHours}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Charge (₹)</label>
+                  <input
+                    type="number"
+                    name="deliveryCharge"
+                    min="0"
+                    step="1"
+                    defaultValue={normalizeDeliveryChargeRupees(fishData.shopInfo?.deliveryCharge)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    ₹0 means free delivery. A positive value is added to the payable amount after any offer discount.
+                  </p>
                 </div>
                 <button type="submit" className="btn-primary">
                   Save Changes

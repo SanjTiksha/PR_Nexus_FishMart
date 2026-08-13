@@ -1,33 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { ShoppingCart, Plus, Minus, Trash2, Calculator, Weight, DollarSign } from 'lucide-react';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
+import { calculateCartSummary, DEFAULT_DISCOUNT_SETTINGS } from '../utils/cartPricing';
+import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 
 const BasketEstimator = ({ fishData, onAddToCart }) => {
   const [basket, setBasket] = useState([]);
-  const [totalWeight, setTotalWeight] = useState(0);
-  const [totalPrice, setTotalPrice] = useState(0);
-  const [deliveryFee, setDeliveryFee] = useState(0);
-  const [discount, setDiscount] = useState(0);
 
-  useEffect(() => {
-    // Calculate totals
-    const weight = basket.reduce((sum, item) => sum + (item.weight * item.quantity), 0);
-    const price = basket.reduce((sum, item) => sum + (item.price * item.weight * item.quantity), 0);
-    
-    setTotalWeight(weight);
-    setTotalPrice(price);
-    
-    // Calculate delivery fee (free over ₹500)
-    setDeliveryFee(price > 500 ? 0 : 50);
-    
-    // Calculate discount based on admin settings
-    const discountSettings = fishData.discountSettings || { isEnabled: true, percentage: 5, minimumAmount: 1000 };
-    if (discountSettings.isEnabled && price >= discountSettings.minimumAmount) {
-      setDiscount(price * (discountSettings.percentage / 100));
-    } else {
-      setDiscount(0);
-    }
-  }, [basket]);
+  const totalWeight = useMemo(
+    () => basket.reduce((sum, item) => sum + (item.weight * item.quantity), 0),
+    [basket],
+  );
+
+  const cartSummary = useMemo(() => {
+    const mapped = basket.map((item) => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      price: item.price,
+      rate: item.price,
+      quantity: (Number(item.weight) || 0) * (Number(item.quantity) || 0),
+    }));
+    return calculateCartSummary(
+      mapped,
+      fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS,
+      fishData?.offers || [],
+      new Date(),
+      normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge),
+    );
+  }, [basket, fishData]);
+
+  const totalPrice = cartSummary.subtotal;
+  const deliveryFee = cartSummary.deliveryCharge;
+  const discount = cartSummary.discount;
+  const finalTotal = cartSummary.total;
 
   const addToBasket = (fish) => {
     const existingItem = basket.find(item => item.id === fish.id);
@@ -77,8 +83,6 @@ const BasketEstimator = ({ fishData, onAddToCart }) => {
   const clearBasket = () => {
     setBasket([]);
   };
-
-  const finalTotal = totalPrice + deliveryFee - discount;
 
   return (
     <div className="space-y-6">
