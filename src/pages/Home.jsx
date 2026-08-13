@@ -3,6 +3,7 @@ import Reviews from '../components/Reviews';
 import SmartBanner from '../components/SmartBanner';
 import HeroSliderSimple from '../components/HeroSliderSimple';
 import SpecialOffersSection from '../components/SpecialOffersSection';
+import FreeDeliveryBenefit from '../components/FreeDeliveryBenefit';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import { COMPANY_EMAILS, mailto } from '../data/companyEmails';
 
@@ -33,6 +34,7 @@ const Home = ({ fishData, refreshFishData }) => {
       </section>
 
       <SpecialOffersSection fishData={fishData} shopNowTo="/" />
+      <FreeDeliveryBenefit />
 
       {/* Brand / Company Hero Content */}
       <section className="py-12 sm:py-16 bg-gradient-to-b from-white via-blue-50 to-cyan-50">

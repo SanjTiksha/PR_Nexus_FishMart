@@ -9,9 +9,17 @@ const typeEmoji = {
   flash: '⚡',
   festival: '🎉',
   promotional: '✨',
-  website_launch: '🚀',
+  website_launch: '🎉',
   weekend: '☀️',
   general: '🏷️',
+};
+
+const GRAND_OPENING_COPY = {
+  eyebrow: 'Grand Opening — 15 August',
+  headline: (discountLabel) => `Celebrate With ${discountLabel} 🎉`,
+  discountLine: (discountLabel) => `${discountLabel} Your First Order`,
+  supporting: 'Fresh fish delivered to your door!',
+  validity: 'Valid 15–31 August 2026',
 };
 
 /**
@@ -55,13 +63,17 @@ const getApplicabilityNote = (offer, fishes = []) => {
   return '';
 };
 
-const getTermsLine = (offer) => {
+const getTermsLine = (offer, { grandOpening = false } = {}) => {
   const parts = [];
   const min = Number(offer?.minimumOrderAmount) || 0;
   const max = Number(offer?.maximumDiscount) || 0;
   if (min > 0) parts.push(`Minimum order ₹${min}`);
   if (max > 0) parts.push(`Maximum discount ₹${max}`);
-  if (offer?.endDate) parts.push(`Valid until ${offer.endDate}`);
+  if (grandOpening) {
+    parts.push(GRAND_OPENING_COPY.validity);
+  } else if (offer?.endDate) {
+    parts.push(`Valid until ${offer.endDate}`);
+  }
   return parts.join(' • ');
 };
 
@@ -78,16 +90,27 @@ const SpecialOffersSection = ({
   const primary = getPrimaryOffer(fishData?.offers || []);
   if (!primary) return null;
 
-  const typeMeta = getOfferTypeMeta(primary.type);
+  const isGrandOpening = primary.type === 'website_launch';
   const discountLabel = formatOfferDiscountLabel(primary);
   const applicability = getApplicabilityNote(primary, fishData?.fishes || []);
-  const terms = getTermsLine(primary);
+  const terms = getTermsLine(primary, { grandOpening: isGrandOpening });
   // Keep admin copy, but sync any "N% OFF" token to the offer's real discount
   // so stale text (e.g. 10% in description while discountValue is 5) never shows.
   const rawDescription = primary.description?.trim() || '';
-  const supportingText = rawDescription
-    ? rawDescription.replace(/\d+\s*%\s*OFF/gi, discountLabel)
-    : `Get ${discountLabel} on your first order. Fresh fish delivered to your door!`;
+  const supportingText = isGrandOpening
+    ? GRAND_OPENING_COPY.supporting
+    : rawDescription
+      ? rawDescription.replace(/\d+\s*%\s*OFF/gi, discountLabel)
+      : `Get ${discountLabel} on your first order. Fresh fish delivered to your door!`;
+  const eyebrow = isGrandOpening
+    ? GRAND_OPENING_COPY.eyebrow
+    : getOfferTypeMeta(primary.type).label;
+  const headline = isGrandOpening
+    ? GRAND_OPENING_COPY.headline(discountLabel)
+    : primary.title;
+  const discountLine = isGrandOpening
+    ? GRAND_OPENING_COPY.discountLine(discountLabel)
+    : `Get ${discountLabel} Your Order`;
   const bannerFromOffer = String(primary.bannerImage || '').trim();
   const visualSrc = bannerFromOffer || DEFAULT_OFFER_VISUAL;
   const visualAlt = bannerFromOffer
@@ -170,7 +193,7 @@ const SpecialOffersSection = ({
           >
             <p className="inline-flex items-center gap-1.5 text-[11px] min-[769px]:text-xs font-bold uppercase tracking-[0.14em] text-orange-200 mb-1.5 min-[769px]:mb-2 drop-shadow-[0_1px_2px_rgba(12,74,110,0.55)]">
               <span aria-hidden="true">{typeEmoji[primary.type] || '🎉'}</span>
-              {typeMeta.label}
+              {eyebrow}
             </p>
 
             <h2
@@ -182,31 +205,57 @@ const SpecialOffersSection = ({
                 drop-shadow-[0_1px_3px_rgba(12,74,110,0.55)]
               "
             >
-              {primary.title}
+              {headline}
             </h2>
 
-            <p
-              className="
-                font-semibold text-amber-300 mb-1 min-[769px]:mb-1.5
-                text-[17px] max-[400px]:text-[16px] min-[414px]:text-[19px]
-                min-[769px]:text-xl lg:text-2xl
-                drop-shadow-[0_1px_3px_rgba(12,74,110,0.5)]
-              "
-            >
-              Get {discountLabel} Your Order
-            </p>
-
-            <p
-              className="
-                text-white/95 leading-snug mb-2 min-[769px]:mb-2 max-w-xl
-                text-[13px] min-[414px]:text-[14px]
-                min-[769px]:text-[15px]
-                max-[768px]:line-clamp-2
-                drop-shadow-[0_1px_2px_rgba(12,74,110,0.45)]
-              "
-            >
-              {supportingText}
-            </p>
+            {isGrandOpening ? (
+              <>
+                <p
+                  className="
+                    text-white/95 leading-snug mb-1 min-[769px]:mb-1.5 max-w-xl
+                    text-[13px] min-[414px]:text-[14px]
+                    min-[769px]:text-[15px]
+                    drop-shadow-[0_1px_2px_rgba(12,74,110,0.45)]
+                  "
+                >
+                  {supportingText}
+                </p>
+                <p
+                  className="
+                    font-semibold text-amber-300 mb-2 min-[769px]:mb-2
+                    text-[17px] max-[400px]:text-[16px] min-[414px]:text-[19px]
+                    min-[769px]:text-xl lg:text-2xl
+                    drop-shadow-[0_1px_3px_rgba(12,74,110,0.5)]
+                  "
+                >
+                  {discountLine}
+                </p>
+              </>
+            ) : (
+              <>
+                <p
+                  className="
+                    font-semibold text-amber-300 mb-1 min-[769px]:mb-1.5
+                    text-[17px] max-[400px]:text-[16px] min-[414px]:text-[19px]
+                    min-[769px]:text-xl lg:text-2xl
+                    drop-shadow-[0_1px_3px_rgba(12,74,110,0.5)]
+                  "
+                >
+                  {discountLine}
+                </p>
+                <p
+                  className="
+                    text-white/95 leading-snug mb-2 min-[769px]:mb-2 max-w-xl
+                    text-[13px] min-[414px]:text-[14px]
+                    min-[769px]:text-[15px]
+                    max-[768px]:line-clamp-2
+                    drop-shadow-[0_1px_2px_rgba(12,74,110,0.45)]
+                  "
+                >
+                  {supportingText}
+                </p>
+              </>
+            )}
 
             {applicability && (
               <p className="hidden min-[769px]:block text-xs sm:text-sm text-cyan-50/95 mb-3 font-medium drop-shadow-[0_1px_2px_rgba(12,74,110,0.4)]">

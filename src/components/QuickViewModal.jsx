@@ -200,7 +200,7 @@ const QuickViewModal = ({ fish, isOpen, onClose, addToCart, onBuyNow, cart, onTo
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-blue-600">🚚</span>
                   </div>
-                  <span className="text-sm text-gray-600">Free Delivery</span>
+                  <span className="text-sm text-gray-600">FREE DELIVERY*</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
@@ -215,6 +215,7 @@ const QuickViewModal = ({ fish, isOpen, onClose, addToCart, onBuyNow, cart, onTo
                   <span className="text-sm text-gray-600">Premium Quality</span>
                 </div>
               </div>
+              <p className="text-[11px] text-gray-500 pt-1">*Conditions apply</p>
             </div>
           </div>
         </div>

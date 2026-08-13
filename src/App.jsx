@@ -9,6 +9,7 @@ import Contact from './pages/Contact';
 import Admin from './pages/Admin';
 import PromoPopup from './components/PromoPopup';
 import PromoBanner from './components/PromoBanner';
+import AndroidAppPromo from './components/AndroidAppPromo';
 import ShoppingCart from './components/ShoppingCart';
 import CheckoutConfirmation from './components/CheckoutConfirmation';
 import QRModal from './components/QRModal';
@@ -714,9 +715,9 @@ function App() {
           cartCount={cart.length} 
           onCartClick={() => setShowCart(true)}
         />
-        
-        
-        
+
+        <AndroidAppPromo />
+
         <main>
           <Routes>
             <Route path="/" element={
