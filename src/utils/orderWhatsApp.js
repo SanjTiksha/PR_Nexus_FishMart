@@ -53,6 +53,7 @@ export const buildOrderWhatsAppMessage = (order, shopInfo = {}) => {
     financial.discount > 0
       ? `\n*Subtotal:* ₹${financial.subtotal.toFixed(2)}\n*${discountLabel}:* -₹${financial.discount.toFixed(2)}`
       : `\n*Subtotal:* ₹${financial.subtotal.toFixed(2)}\n*Discount:* ₹0.00`;
+  const deliveryChargeText = `\n*Delivery:* ₹${Number(financial.deliveryCharge || 0).toFixed(2)}`;
 
   let deliveryAddress = '';
   if (deliveryInfo.address || deliveryInfo.location?.lat) {
@@ -91,7 +92,7 @@ export const buildOrderWhatsAppMessage = (order, shopInfo = {}) => {
 *Date:* ${formatOrderDate(order?.timestamp || order?.createdAt)}${deliveryPrefLine}
 
 *Items Ordered:*
-${orderSummary || '• No items'}${discountText}
+${orderSummary || '• No items'}${discountText}${deliveryChargeText}
 *Final Total:* ₹${financial.total.toFixed(2)}
 ${order?.offerName ? `*Offer:* ${order.offerName}` : ''}
 

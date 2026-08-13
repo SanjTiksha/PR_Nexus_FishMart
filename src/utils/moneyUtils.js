@@ -88,6 +88,35 @@ export const clampDiscountPaise = (discountPaise, maxAllowedPaise) => {
   return Math.min(d, max);
 };
 
-/** Final payable paise = max(0, subtotal - discount). */
-export const payablePaise = (subtotalPaise, discountPaise) =>
-  Math.max(0, Math.round(subtotalPaise) - Math.round(discountPaise));
+/**
+ * Read-path delivery charge in rupees.
+ * Missing / blank / non-finite / negative → ₹0. Never throws.
+ */
+export const normalizeDeliveryChargeRupees = (value) => {
+  if (value === null || value === undefined || value === '') return 0;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return fromPaise(toPaise(n));
+};
+
+/**
+ * Admin save-path parser. Blank → ₹0. Negative / non-numeric → reject.
+ * @returns {{ ok: true, value: number } | { ok: false }}
+ */
+export const parseAdminDeliveryCharge = (raw) => {
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    return { ok: true, value: 0 };
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    return { ok: false };
+  }
+  return { ok: true, value: fromPaise(toPaise(n)) };
+};
+
+/** Final payable paise = max(0, subtotal - discount + delivery). Delivery default 0. */
+export const payablePaise = (subtotalPaise, discountPaise, deliveryPaise = 0) =>
+  Math.max(
+    0,
+    Math.round(subtotalPaise) - Math.round(discountPaise) + Math.round(deliveryPaise || 0),
+  );

@@ -804,6 +804,7 @@ const OrderDetailsModal = ({
               label={discountLabel}
               value={financial.discount > 0 ? `-${money(financial.discount)}` : money(0)}
             />
+            <Row label="Delivery Charge" value={money(financial.deliveryCharge)} />
             <Row label="Total Payable" value={money(financial.total)} strong />
           </section>
 

@@ -6,6 +6,7 @@ import QRModal from './QRModal';
 import QuickViewModal from './QuickViewModal';
 import QuantityInput from './QuantityInput';
 import { QUANTITY_LIMITS, normalizeQuantity } from '../utils/quantityUtils';
+import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 import {
   getBestOfferForProduct,
   formatOfferDiscountLabel,
@@ -285,6 +286,9 @@ const EnhancedFishCard = ({
           cart={cart}
           onToggleFavorite={onToggleFavorite}
           isFavorite={isFavorite}
+          deliveryCharge={normalizeDeliveryChargeRupees(
+            shopInfo?.deliveryCharge ?? fishData?.shopInfo?.deliveryCharge,
+          )}
         />
       )}
     </>

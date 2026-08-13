@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import fishDataFallback from "../data/fishData.json";
+import { normalizeDeliveryChargeRupees } from "../utils/moneyUtils";
 
 // Helper to deduplicate fish array by id and name (keep first occurrence)
 const deduplicateFish = (fishArray) => {
@@ -553,12 +554,19 @@ export const loadFishDataFromFirestore = async () => {
       offers = [];
     }
 
+    const rawShopInfo = shopSetting
+      ? { ...shopSetting }
+      : (config?.shopInfo || fishDataFallback.shopInfo);
+
     // Build data structure with new collections (preferred) or fallback to config
     const data = {
       fishes: fishes.length > 0 ? deduplicateFish(fishes) : (config?.fishes || fishDataFallback.fishes),
       reviews: reviews.length > 0 ? reviews : (config?.reviews || fishDataFallback.reviews),
       // Shop info: prefer shopSetting collection, fallback to config, then fallback JSON
-      shopInfo: shopSetting ? { ...shopSetting } : (config?.shopInfo || fishDataFallback.shopInfo),
+      shopInfo: {
+        ...rawShopInfo,
+        deliveryCharge: normalizeDeliveryChargeRupees(rawShopInfo?.deliveryCharge),
+      },
       // Promotions: prefer promotionBanner collection, fallback to config, then fallback JSON
       promotions: promotionBanner ? { ...promotionBanner } : (config?.promotions || fishDataFallback.promotions),
       // Discount settings: prefer discountSettings collection, fallback to config, then fallback JSON
@@ -1235,7 +1243,10 @@ export const loadShopSettingFromFirestore = async () => {
     if (shopSettingDoc.exists()) {
       const data = shopSettingDoc.data();
       console.log("✅ Loaded shop setting from Firestore");
-      return data;
+      return {
+        ...data,
+        deliveryCharge: normalizeDeliveryChargeRupees(data?.deliveryCharge),
+      };
     } else {
       console.log("⚠️ Shop setting document not found in Firestore");
       return null;

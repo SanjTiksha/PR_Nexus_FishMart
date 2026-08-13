@@ -3,12 +3,15 @@ import { X, ShoppingCart, Star, Heart, Share2 } from 'lucide-react';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import QuantityInput from './QuantityInput';
 import { QUANTITY_LIMITS, normalizeQuantity } from '../utils/quantityUtils';
+import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 
-const QuickViewModal = ({ fish, isOpen, onClose, addToCart, onBuyNow, cart, onToggleFavorite, isFavorite }) => {
+const QuickViewModal = ({ fish, isOpen, onClose, addToCart, onBuyNow, cart, onToggleFavorite, isFavorite, deliveryCharge = 0 }) => {
   const [quantity, setQuantity] = useState(QUANTITY_LIMITS.MIN);
   const [isQuantityValid, setIsQuantityValid] = useState(true);
 
   if (!isOpen || !fish) return null;
+
+  const showFreeDelivery = normalizeDeliveryChargeRupees(deliveryCharge) === 0;
 
   const handleAddToCart = () => {
     if (!isQuantityValid) {
@@ -196,12 +199,14 @@ const QuickViewModal = ({ fish, isOpen, onClose, addToCart, onBuyNow, cart, onTo
                   </div>
                   <span className="text-sm text-gray-600">Fresh Daily</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-blue-600">🚚</span>
+                {showFreeDelivery && (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600">🚚</span>
+                    </div>
+                    <span className="text-sm text-gray-600">FREE DELIVERY*</span>
                   </div>
-                  <span className="text-sm text-gray-600">FREE DELIVERY*</span>
-                </div>
+                )}
                 <div className="flex items-center space-x-2">
                   <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
                     <span className="text-purple-600">🔒</span>
@@ -215,7 +220,9 @@ const QuickViewModal = ({ fish, isOpen, onClose, addToCart, onBuyNow, cart, onTo
                   <span className="text-sm text-gray-600">Premium Quality</span>
                 </div>
               </div>
-              <p className="text-[11px] text-gray-500 pt-1">*Conditions apply</p>
+              {showFreeDelivery && (
+                <p className="text-[11px] text-gray-500 pt-1">*Conditions apply</p>
+              )}
             </div>
           </div>
         </div>

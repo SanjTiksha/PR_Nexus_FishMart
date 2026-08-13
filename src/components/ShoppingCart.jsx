@@ -7,6 +7,7 @@ import {
   calculateCartSummary,
   DEFAULT_DISCOUNT_SETTINGS,
 } from '../utils/cartPricing';
+import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 
 const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onClearCart, onCheckout, fishData }) => {
   const [isAnimating, setIsAnimating] = useState(false);
@@ -27,8 +28,15 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
 
   const cartSummary = useMemo(() => {
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
-    return calculateCartSummary(cart, discountSettings, fishData?.offers || []);
-  }, [cart, fishData?.discountSettings, fishData?.offers]);
+    const deliveryCharge = normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge);
+    return calculateCartSummary(
+      cart,
+      discountSettings,
+      fishData?.offers || [],
+      new Date(),
+      deliveryCharge,
+    );
+  }, [cart, fishData?.discountSettings, fishData?.offers, fishData?.shopInfo?.deliveryCharge]);
 
   const subtotal = cartSummary.subtotal;
   const discount = cartSummary.discount;
@@ -181,6 +189,11 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
                   <span className="font-medium">-₹{discount.toFixed(2)}</span>
                 </div>
               )}
+
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Delivery:</span>
+                <span className="font-medium">₹{Number(cartSummary.deliveryCharge || 0).toFixed(2)}</span>
+              </div>
               
               <hr className="border-gray-200" />
               

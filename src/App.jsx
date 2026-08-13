@@ -37,6 +37,7 @@ import {
   calculateCartSummary,
   DEFAULT_DISCOUNT_SETTINGS,
 } from './utils/cartPricing';
+import { normalizeDeliveryChargeRupees } from './utils/moneyUtils';
 import { createCustomerOrder, incrementOfferUsage } from './services/firestoreService';
 import {
   normalizeDeliveryPreference,
@@ -130,7 +131,12 @@ function App() {
   const [showTransactionSuccess, setShowTransactionSuccess] = useState({ show: false, order: null });
   const [voiceSearchQuery, setVoiceSearchQuery] = useState('');
   const [isVoiceSearchActive, setIsVoiceSearchActive] = useState(false);
-  const [currentCheckoutSummary, setCurrentCheckoutSummary] = useState({ subtotal: 0, discount: 0, total: 0 });
+  const [currentCheckoutSummary, setCurrentCheckoutSummary] = useState({
+    subtotal: 0,
+    discount: 0,
+    deliveryCharge: 0,
+    total: 0,
+  });
   const cartSnapshotRef = useRef([]);
   
   // 3-Step Checkout Flow States
@@ -400,7 +406,14 @@ function App() {
 
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
     const offers = fishData?.offers || [];
-    const summary = calculateCartSummary(cartItems, discountSettings, offers);
+    const deliveryCharge = normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge);
+    const summary = calculateCartSummary(
+      cartItems,
+      discountSettings,
+      offers,
+      new Date(),
+      deliveryCharge,
+    );
 
     // Compare via paise when available (avoids float drift)
     const incomingPaise = Math.round(parseFloat(totalPrice) * 100);
@@ -442,10 +455,13 @@ function App() {
     // Create single item cart for checkout flow (offers may still apply; basket % off)
     const singleItemCart = [{ ...fish, quantity: safeQuantity, price: fish.rate }];
     const offers = fishData?.offers || [];
+    const deliveryCharge = normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge);
     const summary = calculateCartSummary(
       singleItemCart,
       { ...DEFAULT_DISCOUNT_SETTINGS, isEnabled: false },
       offers,
+      new Date(),
+      deliveryCharge,
     );
     
     // Store cart data for checkout flow
@@ -489,8 +505,16 @@ function App() {
 
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
     const offers = fishData?.offers || [];
-    // Recalculate from cart line items — do not trust a browser-edited total alone
-    const summary = calculateCartSummary(currentCheckoutCart, discountSettings, offers);
+    const deliveryCharge = normalizeDeliveryChargeRupees(fishData?.shopInfo?.deliveryCharge);
+    // Recalculate from cart line items — do not trust a browser-edited total alone.
+    // Live deliveryCharge is used; if Admin changed it, totalPaise will not match the lock.
+    const summary = calculateCartSummary(
+      currentCheckoutCart,
+      discountSettings,
+      offers,
+      new Date(),
+      deliveryCharge,
+    );
 
     if (!summary.items.length || summary.totalPaise <= 0) {
       addNotification('Unable to start payment — cart total is invalid.', 'error');
@@ -524,6 +548,8 @@ function App() {
       subtotalPaise: summary.subtotalPaise,
       discount: summary.discount,
       discountPaise: summary.discountPaise,
+      deliveryCharge: summary.deliveryCharge,
+      deliveryChargePaise: summary.deliveryChargePaise,
       items: summary.items,
       offerId: summary.offerId,
       offerName: summary.offerName,
@@ -617,6 +643,10 @@ function App() {
       amountPaise: paymentSession?.amountPaise ?? Math.round(Number(lockedAmount) * 100),
       subtotal: paymentSession?.subtotal ?? currentCheckoutSummary?.subtotal,
       discount: paymentSession?.discount ?? currentCheckoutSummary?.discount,
+      deliveryCharge:
+        paymentSession?.deliveryCharge ?? currentCheckoutSummary?.deliveryCharge ?? 0,
+      deliveryChargePaise:
+        paymentSession?.deliveryChargePaise ?? currentCheckoutSummary?.deliveryChargePaise ?? 0,
       offerId: paymentSession?.offerId || null,
       offerName: paymentSession?.offerName || null,
       offerDiscount: paymentSession?.offerDiscount || 0,
