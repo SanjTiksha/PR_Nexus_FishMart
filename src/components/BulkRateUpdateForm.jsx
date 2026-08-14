@@ -14,7 +14,7 @@ const BulkRateUpdateForm = ({ fishData, refreshFishData }) => {
     const initialOriginal = {};
     
     fishData.fishes.forEach(fish => {
-      const fishId = fish.id.toString();
+      const fishId = String(fish.id);
       initialUpdates[fishId] = {
         fishId: fishId,
         fishName: fish.name,

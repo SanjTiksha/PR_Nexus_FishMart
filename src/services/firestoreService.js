@@ -363,20 +363,13 @@ export const loadFishDataFromFirestore = async () => {
       fishes = fishesSnapshot.docs.map(docSnapshot => {
         const data = docSnapshot.data();
         const docId = docSnapshot.id;
-        const dataId = data.id;
-        
-        // Determine ID: prioritize data.id field, fallback to document ID
-        let fishId;
-        if (dataId !== undefined && dataId !== null) {
-          fishId = typeof dataId === 'number' ? dataId : dataId.toString();
-        } else {
-          const parsedDocId = parseInt(docId);
-          fishId = !isNaN(parsedDocId) ? parsedDocId : docId;
-        }
+
+        // Canonical identity for Firestore operations is the document ID.
+        // data.id is a legacy catalog field only — never parseInt(docId).
         
         // Map Firestore document to app structure
         return {
-          id: fishId,
+          id: docId,
           name: data.name || '',
           category: data.category || '',
           rate: data.rate || 0,
@@ -1735,15 +1728,23 @@ export const bulkUpdateFishRates = async (updates, adminUser = 'admin', maxRetri
       // First, find all document references
       const fishesSnapshot = await getDocs(collection(db, COLLECTIONS.FISHES));
       const fishDocsMap = new Map();
-      fishesSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const fishId = data.id?.toString() || doc.id;
-        fishDocsMap.set(fishId.toString(), { ref: doc.ref, data: data });
+      fishesSnapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const entry = { ref: docSnap.ref, data };
+        // Primary key: real Firestore document ID
+        fishDocsMap.set(docSnap.id, entry);
+        // Legacy data.id may still appear in older UI state; never overwrite a real doc.id key
+        if (data.id !== undefined && data.id !== null && data.id !== '') {
+          const legacyId = String(data.id);
+          if (legacyId && !fishDocsMap.has(legacyId)) {
+            fishDocsMap.set(legacyId, entry);
+          }
+        }
       });
 
       // Prepare batch updates
       for (const update of validatedUpdates) {
-        const fishIdStr = update.fishId.toString();
+        const fishIdStr = String(update.fishId);
         const fishDoc = fishDocsMap.get(fishIdStr);
 
         if (!fishDoc) {
