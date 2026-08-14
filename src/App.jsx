@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import About from './pages/About';
 import FishCatalog from './pages/FishCatalog';
 import Contact from './pages/Contact';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import Admin from './pages/Admin';
 import PromoPopup from './components/PromoPopup';
 import PromoBanner from './components/PromoBanner';
@@ -765,6 +766,7 @@ function App() {
             <Route path="/home" element={<Home fishData={fishData} addToCart={addToCart} refreshFishData={refreshFishData} />} />
             <Route path="/about" element={<About shopInfo={fishData.shopInfo} />} />
             <Route path="/contact" element={<Contact shopInfo={fishData.shopInfo} />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy shopInfo={fishData.shopInfo} />} />
             <Route path="/admin" element={<Admin fishData={fishData} refreshFishData={refreshFishData} />} />
           </Routes>
         </main>

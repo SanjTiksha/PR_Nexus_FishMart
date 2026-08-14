@@ -1,13 +1,21 @@
 import { Link } from 'react-router-dom';
 import { COMPANY_EMAILS, mailto } from '../data/companyEmails';
 
-const Footer = ({ shopInfo }) => {
-  const currentYear = new Date().getFullYear();
-  const lastUpdated = new Date(shopInfo.updatedOn).toLocaleDateString('en-IN', {
+const formatShopUpdatedDate = (shopInfo) => {
+  const raw = shopInfo?.updatedOn || shopInfo?.updatedAt;
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString('en-IN', {
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
   });
+};
+
+const Footer = ({ shopInfo }) => {
+  const currentYear = new Date().getFullYear();
+  const lastUpdated = formatShopUpdatedDate(shopInfo);
 
   return (
     <footer className="bg-gradient-to-t from-gray-900 via-blue-900 to-gray-900 text-white">
@@ -23,7 +31,9 @@ const Footer = ({ shopInfo }) => {
               <p className="text-gray-300">📞 {shopInfo.phone}</p>
               <p className="text-gray-300">🕒 {shopInfo.workingHours}</p>
             </div>
-            <p className="text-gray-400 text-sm mt-4">Last Updated: {lastUpdated}</p>
+            {lastUpdated && (
+              <p className="text-gray-400 text-sm mt-4">Last Updated: {lastUpdated}</p>
+            )}
           </div>
 
           {/* Quick Links */}
@@ -52,6 +62,12 @@ const Footer = ({ shopInfo }) => {
                 <Link to="/contact" className="text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2 flex items-center">
                   <span className="mr-2">📞</span>
                   Contact
+                </Link>
+              </li>
+              <li>
+                <Link to="/privacy-policy" className="text-gray-300 hover:text-blue-400 transition-all duration-300 hover:translate-x-2 flex items-center">
+                  <span className="mr-2">🔒</span>
+                  Privacy Policy
                 </Link>
               </li>
             </ul>
