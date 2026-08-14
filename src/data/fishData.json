@@ -16,7 +16,7 @@
     "isActive": true,
     "expiresOn": "2025-12-31T23:59:59Z",
     "discountPercentage": 15,
-    "discountedFish": ["Surmai (King Fish)", "Pomfret (White)"]
+    "discountedFish": ["Surmai (King Fish)"]
   },
   "discountSettings": {
     "isEnabled": true,
@@ -80,16 +80,6 @@
           "updatedBy": "admin"
         }
       ]
-    },
-    {
-      "id": 2,
-      "name": "Pomfret (White)",
-      "category": "Seawater",
-      "rate": 380,
-      "unit": "per kg",
-      "image": "https://images.unsplash.com/photo-1559737558-9d8c3c6e8e4f?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=80",
-      "inStock": true,
-      "description": "Premium white pomfret, ideal for curry"
     },
     {
       "id": 3,
