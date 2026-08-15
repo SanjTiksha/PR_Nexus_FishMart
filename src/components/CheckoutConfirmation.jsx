@@ -609,14 +609,14 @@ const CheckoutConfirmation = ({
                       <Phone className="w-4 h-4 inline mr-1" />
                       Mobile Number *
                     </label>
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3">
                       <input
                         ref={mobileInputRef}
                         type="tel"
                         name="mobileNumber"
                         value={deliveryInfo.mobileNumber}
                         onChange={handleInputChange}
-                        className="flex-1 px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        className="min-w-0 w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
                         placeholder="Enter 10-digit mobile number"
                         maxLength={10}
                         inputMode="numeric"
@@ -635,7 +635,7 @@ const CheckoutConfirmation = ({
                             !captchaReady ||
                             !captchaSolved
                           }
-                          className="min-h-[48px] px-3 sm:px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold whitespace-nowrap active:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-500"
+                          className="order-last sm:order-none w-full sm:w-auto min-h-[48px] px-3 sm:px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold whitespace-nowrap active:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-500"
                           title={
                             captchaSolved
                               ? 'Send OTP'
@@ -645,34 +645,33 @@ const CheckoutConfirmation = ({
                           {sendingOtp ? 'Sending…' : 'Verify Mobile'}
                         </button>
                       )}
-                    </div>
-
-                    {!isCurrentMobileVerified && (
-                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-                        <p className="text-sm font-semibold text-gray-800">Security check</p>
-                        <p className="text-xs text-gray-600">
-                          Complete the captcha, then tap Verify Mobile.
-                        </p>
-                        <div
-                          id={MSG91_CAPTCHA_RENDER_ID}
-                          className="min-h-[78px] flex justify-center items-center overflow-x-auto"
-                        />
-                        {captchaInitError && (
-                          <p className="text-xs text-red-600">{captchaInitError}</p>
-                        )}
-                        {!captchaInitError && captchaReady && (
-                          <p
-                            className={`text-xs font-medium ${
-                              captchaSolved ? 'text-green-700' : 'text-amber-800'
-                            }`}
-                          >
-                            {captchaSolved
-                              ? 'Captcha completed ✓ — you can verify mobile now.'
-                              : 'Waiting for captcha…'}
+                      {!isCurrentMobileVerified && (
+                        <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                          <p className="text-sm font-semibold text-gray-800">Security check</p>
+                          <p className="text-xs text-gray-600">
+                            Complete the captcha, then tap Verify Mobile.
                           </p>
-                        )}
-                      </div>
-                    )}
+                          <div
+                            id={MSG91_CAPTCHA_RENDER_ID}
+                            className="min-h-[78px] flex justify-center items-center overflow-x-auto"
+                          />
+                          {captchaInitError && (
+                            <p className="text-xs text-red-600">{captchaInitError}</p>
+                          )}
+                          {!captchaInitError && captchaReady && (
+                            <p
+                              className={`text-xs font-medium ${
+                                captchaSolved ? 'text-green-700' : 'text-amber-800'
+                              }`}
+                            >
+                              {captchaSolved
+                                ? 'Captcha completed ✓ — you can verify mobile now.'
+                                : 'Waiting for captcha…'}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
                     {isCurrentMobileVerified && (
                       <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
