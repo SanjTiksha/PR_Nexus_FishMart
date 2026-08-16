@@ -1,26 +1,13 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import Home from './pages/Home';
-import About from './pages/About';
 import FishCatalog from './pages/FishCatalog';
-import Contact from './pages/Contact';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import Admin from './pages/Admin';
 import PromoPopup from './components/PromoPopup';
 import PromoBanner from './components/PromoBanner';
 import AndroidAppPromo from './components/AndroidAppPromo';
 import ShoppingCart from './components/ShoppingCart';
-import CheckoutConfirmation from './components/CheckoutConfirmation';
-import QRModal from './components/QRModal';
-import TransactionSuccess from './components/TransactionSuccess';
 import Toast from './components/Toast';
-import SmartBanner from './components/SmartBanner';
-import CookingGuide from './components/CookingGuide';
-import BasketEstimator from './components/BasketEstimator';
-import PriceAlerts from './components/PriceAlerts';
-import VoiceSearch from './components/VoiceSearch';
 import ThemeToggle from './components/ThemeToggle';
 import EnhancedLoadingSpinner from './components/EnhancedLoadingSpinner';
 import { useNotifications } from './hooks/useNotifications';
@@ -45,6 +32,22 @@ import {
   normalizeSlot,
   validateDeliverySelection,
 } from './utils/deliverySlot';
+
+const Home = lazy(() => import('./pages/Home'));
+const About = lazy(() => import('./pages/About'));
+const Contact = lazy(() => import('./pages/Contact'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const Admin = lazy(() => import('./pages/Admin'));
+const CheckoutConfirmation = lazy(() => import('./components/CheckoutConfirmation'));
+const QRModal = lazy(() => import('./components/QRModal'));
+const TransactionSuccess = lazy(() => import('./components/TransactionSuccess'));
+const BasketEstimator = lazy(() => import('./components/BasketEstimator'));
+const PriceAlerts = lazy(() => import('./components/PriceAlerts'));
+const VoiceSearch = lazy(() => import('./components/VoiceSearch'));
+
+const lazyFallback = (
+  <EnhancedLoadingSpinner message="Loading Fresh Fish Data..." size="large" />
+);
 
 const ScrollToTop = ({ enabled }) => {
   const location = useLocation();
@@ -750,7 +753,8 @@ function App() {
         <AndroidAppPromo />
 
         <main>
-          <Routes>
+          <Suspense fallback={lazyFallback}>
+            <Routes>
             <Route path="/" element={
               <FishCatalog 
                 fishData={fishData} 
@@ -768,7 +772,8 @@ function App() {
             <Route path="/contact" element={<Contact shopInfo={fishData.shopInfo} />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy shopInfo={fishData.shopInfo} />} />
             <Route path="/admin" element={<Admin fishData={fishData} refreshFishData={refreshFishData} />} />
-          </Routes>
+            </Routes>
+          </Suspense>
         </main>
         
         <Footer shopInfo={fishData.shopInfo} />
@@ -787,55 +792,65 @@ function App() {
 
         {/* 3-Step Checkout Flow */}
         {/* Step 1: Checkout Confirmation */}
-        <CheckoutConfirmation
-          isOpen={showCheckoutConfirmation}
-          onClose={() => setShowCheckoutConfirmation(false)}
-          cart={currentCheckoutCart}
-          totalPrice={currentCheckoutTotal}
-          orderSummary={currentCheckoutSummary}
-          deliveryPreference={deliveryPreference}
-          onDeliveryPreferenceChange={setDeliveryPreference}
-          onProceedToPayment={(deliveryInfo) => {
-            console.log('📞 App.jsx: onProceedToPayment callback called with deliveryInfo:', deliveryInfo);
-            handleProceedToPayment(deliveryInfo);
-          }}
-        />
+        {showCheckoutConfirmation && (
+          <Suspense fallback={lazyFallback}>
+            <CheckoutConfirmation
+              isOpen={showCheckoutConfirmation}
+              onClose={() => setShowCheckoutConfirmation(false)}
+              cart={currentCheckoutCart}
+              totalPrice={currentCheckoutTotal}
+              orderSummary={currentCheckoutSummary}
+              deliveryPreference={deliveryPreference}
+              onDeliveryPreferenceChange={setDeliveryPreference}
+              onProceedToPayment={(deliveryInfo) => {
+                console.log('📞 App.jsx: onProceedToPayment callback called with deliveryInfo:', deliveryInfo);
+                handleProceedToPayment(deliveryInfo);
+              }}
+            />
+          </Suspense>
+        )}
 
         {/* Step 2: QR Payment with Transaction ID Input */}
         {showQRPayment && fishData && paymentSession && (
-          <QRModal
-            fish={{ name: 'Order', rate: paymentSession.amount }}
-            shopInfo={fishData.shopInfo}
-            onClose={() => {
-              setShowQRPayment(false);
-              // Keep session until cancelled fully — clear locked session on cancel
-              setPaymentSession(null);
-            }}
-            isCheckoutFlow={true}
-            cart={paymentSession.items || currentCheckoutCart}
-            totalPrice={paymentSession.amount}
-            paymentSession={paymentSession}
-            onPaymentDone={handlePaymentDone}
-          />
+          <Suspense fallback={lazyFallback}>
+            <QRModal
+              fish={{ name: 'Order', rate: paymentSession.amount }}
+              shopInfo={fishData.shopInfo}
+              onClose={() => {
+                setShowQRPayment(false);
+                // Keep session until cancelled fully — clear locked session on cancel
+                setPaymentSession(null);
+              }}
+              isCheckoutFlow={true}
+              cart={paymentSession.items || currentCheckoutCart}
+              totalPrice={paymentSession.amount}
+              paymentSession={paymentSession}
+              onPaymentDone={handlePaymentDone}
+            />
+          </Suspense>
         )}
 
         {/* Step 3: Transaction Success Modal */}
-        <TransactionSuccess
-          isOpen={showTransactionSuccess.show}
-          order={showTransactionSuccess.order}
-          shopInfo={fishData?.shopInfo}
-          onClose={() => {
-            setShowTransactionSuccess({ show: false, order: null });
-            // Clean up temporary delivery info after modal is closed
-            localStorage.removeItem('currentOrderDeliveryInfo');
-          }}
-          onContinueShopping={() => {
-            setShowTransactionSuccess({ show: false, order: null });
-            // Clean up temporary delivery info after modal is closed
-            localStorage.removeItem('currentOrderDeliveryInfo');
-            // Optionally redirect to fish catalog
-          }}
-        />
+        {showTransactionSuccess.show && (
+          <Suspense fallback={lazyFallback}>
+            <TransactionSuccess
+              isOpen={showTransactionSuccess.show}
+              order={showTransactionSuccess.order}
+              shopInfo={fishData?.shopInfo}
+              onClose={() => {
+                setShowTransactionSuccess({ show: false, order: null });
+                // Clean up temporary delivery info after modal is closed
+                localStorage.removeItem('currentOrderDeliveryInfo');
+              }}
+              onContinueShopping={() => {
+                setShowTransactionSuccess({ show: false, order: null });
+                // Clean up temporary delivery info after modal is closed
+                localStorage.removeItem('currentOrderDeliveryInfo');
+                // Optionally redirect to fish catalog
+              }}
+            />
+          </Suspense>
+        )}
 
         {/* Basket Estimator */}
         {showBasketEstimator && (
@@ -851,7 +866,9 @@ function App() {
                     ✕
                   </button>
                 </div>
-                <BasketEstimator fishData={fishData} onAddToCart={addToCart} />
+                <Suspense fallback={lazyFallback}>
+                  <BasketEstimator fishData={fishData} onAddToCart={addToCart} />
+                </Suspense>
               </div>
             </div>
           </div>
@@ -871,7 +888,9 @@ function App() {
                     ✕
                   </button>
                 </div>
-                <PriceAlerts fishData={fishData} addNotification={addNotification} />
+                <Suspense fallback={lazyFallback}>
+                  <PriceAlerts fishData={fishData} addNotification={addNotification} />
+                </Suspense>
               </div>
             </div>
           </div>
@@ -879,7 +898,8 @@ function App() {
 
         {/* Voice Search */}
         {showVoiceSearch && (
-          <VoiceSearch
+          <Suspense fallback={lazyFallback}>
+            <VoiceSearch
             fishList={fishData?.fishes || []}
             onSearch={(query) => {
               if (query) {
@@ -898,7 +918,8 @@ function App() {
               setShowVoiceSearch(false);
               setIsVoiceSearchActive(false);
             }}
-          />
+            />
+          </Suspense>
         )}
 
 

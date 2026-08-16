@@ -294,21 +294,9 @@ export const runFirestoreDiagnostics = async () => {
  */
 export const loadFishDataFromFirestore = async () => {
   try {
-    // Test Firestore connection first
     console.log('🔄 ========== STARTING FIRESTORE DATA LOAD ==========');
-    console.log('🔄 Testing Firestore connection...');
-    
-    // Run comprehensive diagnostics first (but don't fail if it errors)
-    try {
-      const diagnostics = await runFirestoreDiagnostics();
-      if (diagnostics.overallStatus !== 'PASS') {
-        console.warn('⚠️ Diagnostics detected issues:', diagnostics.overallStatus);
-        console.warn('Recommendations:', diagnostics.recommendations);
-      }
-    } catch (diagError) {
-      console.warn('⚠️ Diagnostics failed to run (non-critical):', diagError);
-      // Continue with load anyway
-    }
+
+    // Skip diagnostics here: they duplicate the fishes read and add a Google probe.
     
     // Validate db is initialized
     if (!db) {
@@ -345,28 +333,26 @@ export const loadFishDataFromFirestore = async () => {
       console.error('❌ Error reading Firebase config:', configError);
     }
     
-    // Load fishes with detailed error handling
-    console.log(`🔄 Attempting to load from collection: "${COLLECTIONS.FISHES}"`);
-    let fishesSnapshot;
-    let fishes = [];
-    
-    try {
+    // Start independent reads together. Fishes failure still throws after
+    // the existing error handling; supporting reads catch and continue.
+    const fishesPromise = (async () => {
+      console.log(`🔄 Attempting to load from collection: "${COLLECTIONS.FISHES}"`);
       console.log('🔄 Calling getDocs(collection(db, "fishes"))...');
-      fishesSnapshot = await getDocs(collection(db, COLLECTIONS.FISHES));
+      const fishesSnapshot = await getDocs(collection(db, COLLECTIONS.FISHES));
       console.log(`✅ getDocs completed successfully`);
       console.log(`📊 Firestore: Found ${fishesSnapshot.docs.length} documents in 'fishes' collection`);
-      
+
       if (fishesSnapshot.docs.length === 0) {
         console.log('⚠️ WARNING: Fishes collection exists but is empty');
       }
-      
-      fishes = fishesSnapshot.docs.map(docSnapshot => {
+
+      const mappedFishes = fishesSnapshot.docs.map(docSnapshot => {
         const data = docSnapshot.data();
         const docId = docSnapshot.id;
 
         // Canonical identity for Firestore operations is the document ID.
         // data.id is a legacy catalog field only — never parseInt(docId).
-        
+
         // Map Firestore document to app structure
         return {
           id: docId,
@@ -383,9 +369,92 @@ export const loadFishDataFromFirestore = async () => {
           rateHistory: data.rateHistory || []
         };
       });
-      
-      console.log(`✅ Successfully mapped ${fishes.length} fish documents`);
-      
+
+      console.log(`✅ Successfully mapped ${mappedFishes.length} fish documents`);
+      return mappedFishes;
+    })();
+
+    const reviewsPromise = (async () => {
+      try {
+        console.log(`🔄 Loading reviews from collection: "${COLLECTIONS.REVIEWS}"`);
+        const reviewsSnapshot = await getDocs(collection(db, COLLECTIONS.REVIEWS));
+        const loadedReviews = reviewsSnapshot.docs.map(doc => ({
+          id: doc.data().id || parseInt(doc.id) || doc.id,
+          ...doc.data()
+        })).sort((a, b) => {
+          const dateA = new Date(a.date || a.createdAt || 0).getTime();
+          const dateB = new Date(b.date || b.createdAt || 0).getTime();
+          if (dateB !== dateA) return dateB - dateA;
+          const idA = typeof a.id === 'number' ? a.id : parseInt(a.id, 10) || 0;
+          const idB = typeof b.id === 'number' ? b.id : parseInt(b.id, 10) || 0;
+          return idB - idA;
+        });
+        console.log(`📊 Firestore: Found ${loadedReviews.length} reviews`);
+        return loadedReviews;
+      } catch (reviewsError) {
+        console.error('❌ Error fetching reviews:', reviewsError);
+        console.log('⚠️ Continuing without reviews...');
+        return [];
+      }
+    })();
+
+    const configPromise = (async () => {
+      try {
+        console.log(`🔄 Loading config from: "${COLLECTIONS.CONFIG}/app"`);
+        const configDoc = await getDoc(doc(db, COLLECTIONS.CONFIG, "app"));
+        const loadedConfig = configDoc.exists() ? configDoc.data() : null;
+        if (loadedConfig) {
+          console.log('📊 Firestore: Config document found');
+        } else {
+          console.log('⚠️ Firestore: Config document not found (using fallback)');
+        }
+        return loadedConfig;
+      } catch (configError) {
+        console.error('❌ Error fetching config:', configError);
+        console.log('⚠️ Continuing without config (using fallback)...');
+        return null;
+      }
+    })();
+
+    const shopSettingPromise = (async () => {
+      try {
+        return await loadShopSettingFromFirestore();
+      } catch (error) {
+        console.log('⚠️ Could not load shopSetting, will use config fallback');
+        return null;
+      }
+    })();
+
+    const promotionBannerPromise = (async () => {
+      try {
+        return await loadPromotionBannerFromFirestore();
+      } catch (error) {
+        console.log('⚠️ Could not load promotionBanner, will use config fallback');
+        return null;
+      }
+    })();
+
+    const discountSettingsPromise = (async () => {
+      try {
+        return await loadDiscountSettingsFromFirestore();
+      } catch (error) {
+        console.log('⚠️ Could not load discountSettings, will use config fallback');
+        return null;
+      }
+    })();
+
+    const offersPromise = (async () => {
+      try {
+        return await loadOffersFromFirestore();
+      } catch (error) {
+        console.log('⚠️ Could not load offers, continuing with empty list');
+        return [];
+      }
+    })();
+
+    let fishes = [];
+    try {
+      fishes = await fishesPromise;
     } catch (fetchError) {
       console.error('❌ ========== ERROR FETCHING FISHES ==========');
       console.error('❌ Error fetching fishes collection:', fetchError);
@@ -396,7 +465,7 @@ export const loadFishDataFromFirestore = async () => {
         name: fetchError.name || 'NO NAME',
         stack: fetchError.stack?.substring(0, 500) || 'NO STACK'
       });
-      
+
       // Provide specific guidance based on error code
       const errorCode = fetchError.code || 'UNKNOWN';
       if (errorCode === 'permission-denied') {
@@ -435,7 +504,7 @@ export const loadFishDataFromFirestore = async () => {
         console.error('   → Verify Firebase project is active');
         console.error('   → Check Firebase Console for any service issues');
       }
-      
+
       // Run diagnostics again to get more detailed info
       try {
         console.log('🔄 Running diagnostics to get detailed error information...');
@@ -444,10 +513,10 @@ export const loadFishDataFromFirestore = async () => {
       } catch (diagError) {
         console.warn('⚠️ Could not run diagnostics:', diagError);
       }
-      
+
       throw fetchError; // Re-throw to be caught by outer catch
     }
-    
+
     // Log sample of loaded data for debugging
     if (fishes.length > 0) {
       console.log('📊 Sample Firestore data:', {
@@ -459,45 +528,21 @@ export const loadFishDataFromFirestore = async () => {
       console.log('⚠️ No fish data found in Firestore (collection may be empty)');
     }
 
-    // Load reviews with error handling
-    let reviews = [];
-    try {
-      console.log(`🔄 Loading reviews from collection: "${COLLECTIONS.REVIEWS}"`);
-      const reviewsSnapshot = await getDocs(collection(db, COLLECTIONS.REVIEWS));
-      reviews = reviewsSnapshot.docs.map(doc => ({
-        id: doc.data().id || parseInt(doc.id) || doc.id,
-        ...doc.data()
-      })).sort((a, b) => {
-        const dateA = new Date(a.date || a.createdAt || 0).getTime();
-        const dateB = new Date(b.date || b.createdAt || 0).getTime();
-        if (dateB !== dateA) return dateB - dateA;
-        const idA = typeof a.id === 'number' ? a.id : parseInt(a.id, 10) || 0;
-        const idB = typeof b.id === 'number' ? b.id : parseInt(b.id, 10) || 0;
-        return idB - idA;
-      });
-      console.log(`📊 Firestore: Found ${reviews.length} reviews`);
-    } catch (reviewsError) {
-      console.error('❌ Error fetching reviews:', reviewsError);
-      console.log('⚠️ Continuing without reviews...');
-      // Don't throw - we can continue without reviews
-    }
-
-    // Load config (shopInfo, promotions, discountSettings) with error handling
-    let config = null;
-    try {
-      console.log(`🔄 Loading config from: "${COLLECTIONS.CONFIG}/app"`);
-      const configDoc = await getDoc(doc(db, COLLECTIONS.CONFIG, "app"));
-      config = configDoc.exists() ? configDoc.data() : null;
-      if (config) {
-        console.log('📊 Firestore: Config document found');
-      } else {
-        console.log('⚠️ Firestore: Config document not found (using fallback)');
-      }
-    } catch (configError) {
-      console.error('❌ Error fetching config:', configError);
-      console.log('⚠️ Continuing without config (using fallback)...');
-      // Don't throw - we can continue without config
-    }
+    const [
+      reviews,
+      config,
+      shopSetting,
+      promotionBanner,
+      discountSettings,
+      offers,
+    ] = await Promise.all([
+      reviewsPromise,
+      configPromise,
+      shopSettingPromise,
+      promotionBannerPromise,
+      discountSettingsPromise,
+      offersPromise,
+    ]);
 
     // If no data in Firestore, use JSON fallback and initialize Firestore
     if (fishes.length === 0 && !config) {
@@ -512,39 +557,6 @@ export const loadFishDataFromFirestore = async () => {
         console.error('❌ Error initializing Firestore:', initError);
         console.log('⚠️ Falling back to JSON data without initialization');
       }
-    }
-
-    // Load shop setting from new collection (with fallback to config)
-    let shopSetting = null;
-    try {
-      shopSetting = await loadShopSettingFromFirestore();
-    } catch (error) {
-      console.log('⚠️ Could not load shopSetting, will use config fallback');
-    }
-
-    // Load promotion banner from new collection (with fallback to config)
-    let promotionBanner = null;
-    try {
-      promotionBanner = await loadPromotionBannerFromFirestore();
-    } catch (error) {
-      console.log('⚠️ Could not load promotionBanner, will use config fallback');
-    }
-
-    // Load discount settings from new collection (with fallback to config)
-    let discountSettings = null;
-    try {
-      discountSettings = await loadDiscountSettingsFromFirestore();
-    } catch (error) {
-      console.log('⚠️ Could not load discountSettings, will use config fallback');
-    }
-
-    // Load offers & promotions collection (optional — empty array if missing/unavailable)
-    let offers = [];
-    try {
-      offers = await loadOffersFromFirestore();
-    } catch (error) {
-      console.log('⚠️ Could not load offers, continuing with empty list');
-      offers = [];
     }
 
     const rawShopInfo = shopSetting
