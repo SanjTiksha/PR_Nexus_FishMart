@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -12,7 +12,20 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+// iPhone, iPad, iPod, and iPadOS (Macintosh UA + touch). iOS Chrome is WebKit.
+const isIOSWebKit = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+  return false;
+};
+
+// useFetchStreams is an internal Firestore setting. On iOS/WebKit, disable fetch
+// streams so WebChannel uses XHR and avoids the ~30s completion hang.
+const firestoreSettings = isIOSWebKit() ? { useFetchStreams: false } : {};
+const db = initializeFirestore(app, firestoreSettings);
 const auth = getAuth(app);
 
 export { db, auth };
