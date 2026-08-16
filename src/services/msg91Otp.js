@@ -8,9 +8,16 @@
 
 const SCRIPT_URL = 'https://verify.msg91.com/otp-provider.js';
 const CAPTCHA_RENDER_ID = 'msg91-captcha-checkout';
+/** Future customer-login captcha mount — do not use for checkout. */
+export const MSG91_LOGIN_CAPTCHA_RENDER_ID = 'msg91-captcha-login';
 
 let initPromise = null;
 let captchaListeners = new Set();
+/** Active mount id. Default and checkout callers remain msg91-captcha-checkout. */
+let activeCaptchaRenderId = CAPTCHA_RENDER_ID;
+
+const resolveCaptchaRenderId = (captchaRenderId) =>
+  captchaRenderId || CAPTCHA_RENDER_ID;
 
 /** Digits-only 10-digit Indian mobile from user input */
 export const normalizeIndianMobile = (input) => {
@@ -76,7 +83,9 @@ export const onMsg91CaptchaChange = (listener) => {
 };
 
 const getCaptchaMount = () =>
-  typeof document !== 'undefined' ? document.getElementById(CAPTCHA_RENDER_ID) : null;
+  typeof document !== 'undefined'
+    ? document.getElementById(activeCaptchaRenderId)
+    : null;
 
 const captchaHasWidget = (el) => {
   if (!el) return false;
@@ -275,18 +284,30 @@ const buildConfiguration = () => {
     identifier: '',
     exposeMethods: true,
     // Required for visible H-Captcha with custom UI
-    captchaRenderId: CAPTCHA_RENDER_ID,
+    captchaRenderId: activeCaptchaRenderId,
     captchaVerified: (ok) => notifyCaptchaListeners(!!ok),
     success: () => {},
     failure: () => {},
   };
 };
 
+const captchaMountMissingMessage = () =>
+  activeCaptchaRenderId === CAPTCHA_RENDER_ID
+    ? 'Captcha container is not ready. Open delivery details and try again.'
+    : 'Captcha container is not ready. Please try again.';
+
 /**
  * Load otp-provider.js once and init into an existing captcha mount node.
- * Captcha DOM (#msg91-captcha-checkout) MUST exist before calling this.
+ * Default mount is #msg91-captcha-checkout (checkout). Pass captchaRenderId
+ * only for a separate login mount. Checkout callers may omit options.
  */
-export const ensureMsg91OtpReady = () => {
+export const ensureMsg91OtpReady = (options = {}) => {
+  const renderId = resolveCaptchaRenderId(options.captchaRenderId);
+  if (renderId !== activeCaptchaRenderId) {
+    initPromise = null;
+  }
+  activeCaptchaRenderId = renderId;
+
   let configuration;
   try {
     configuration = buildConfiguration();
@@ -296,9 +317,7 @@ export const ensureMsg91OtpReady = () => {
 
   const mount = getCaptchaMount();
   if (!mount) {
-    return Promise.reject(
-      new Error('Captcha container is not ready. Open delivery details and try again.'),
-    );
+    return Promise.reject(new Error(captchaMountMissingMessage()));
   }
 
   // Already initialized and captcha still present in the current mount node
@@ -359,11 +378,7 @@ export const ensureMsg91OtpReady = () => {
       try {
         if (!getCaptchaMount()) {
           initPromise = null;
-          reject(
-            new Error(
-              'Captcha container is not ready. Open delivery details and try again.',
-            ),
-          );
+          reject(new Error(captchaMountMissingMessage()));
           return;
         }
         if (typeof window.initSendOTP === 'function') {
@@ -398,7 +413,7 @@ export const ensureMsg91OtpReady = () => {
 };
 
 export const sendMsg91Otp = async (identifier) => {
-  await ensureMsg91OtpReady();
+  await ensureMsg91OtpReady({ captchaRenderId: activeCaptchaRenderId });
   installCaptchaTokenBridge();
 
   // Sync any completed H-Captcha response into MSG91, then trust MSG91's API only
