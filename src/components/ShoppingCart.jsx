@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { X, ShoppingBag, Trash2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { X, ShoppingBag, Trash2, ChevronDown } from 'lucide-react';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import QuantityInput from './QuantityInput';
 import { calculateLineTotal, normalizeQuantity } from '../utils/quantityUtils';
@@ -12,6 +12,8 @@ import { normalizeDeliveryChargeRupees } from '../utils/moneyUtils';
 const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onClearCart, onCheckout, fishData }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [invalidItems, setInvalidItems] = useState({});
+  const [hiddenBelowCount, setHiddenBelowCount] = useState(0);
+  const listRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -25,6 +27,62 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
   useEffect(() => {
     setInvalidItems({});
   }, [cart]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const { body, documentElement } = document;
+    const previousBodyOverflow = body.style.overflow;
+    const previousHtmlOverflow = documentElement.style.overflow;
+    body.style.overflow = 'hidden';
+    documentElement.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [isOpen]);
+
+  const updateHiddenBelowCount = useCallback(() => {
+    const container = listRef.current;
+    if (!container || cart.length <= 1) {
+      setHiddenBelowCount(0);
+      return;
+    }
+
+    const containerBottom = container.getBoundingClientRect().bottom;
+    const itemNodes = container.querySelectorAll('[data-cart-item]');
+    let hidden = 0;
+    itemNodes.forEach((node) => {
+      if (node.getBoundingClientRect().top >= containerBottom - 2) {
+        hidden += 1;
+      }
+    });
+    setHiddenBelowCount(hidden);
+  }, [cart.length]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHiddenBelowCount(0);
+      return undefined;
+    }
+
+    const frame = requestAnimationFrame(updateHiddenBelowCount);
+    const timer = setTimeout(updateHiddenBelowCount, 320);
+    window.addEventListener('resize', updateHiddenBelowCount);
+
+    const container = listRef.current;
+    const observer =
+      container && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(updateHiddenBelowCount)
+        : null;
+    if (container && observer) observer.observe(container);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateHiddenBelowCount);
+      observer?.disconnect();
+    };
+  }, [isOpen, cart, isAnimating, updateHiddenBelowCount]);
 
   const cartSummary = useMemo(() => {
     const discountSettings = fishData?.discountSettings || DEFAULT_DISCOUNT_SETTINGS;
@@ -56,7 +114,7 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden overscroll-none"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -64,16 +122,23 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
       }}
     >
       <div 
-        className={`bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-[33.6rem] max-h-[94vh] flex flex-col transform transition-all duration-300 pb-safe ${
+        className={`bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-[33.6rem] h-[94vh] max-h-[94vh] sm:h-auto flex flex-col overflow-hidden transform transition-all duration-300 pb-safe ${
           isAnimating ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center space-x-2">
-            <ShoppingBag className="w-5 h-5 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900">Shopping Cart</h2>
+        <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+          <div className="flex items-center space-x-2 min-w-0 flex-wrap">
+            <ShoppingBag className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <h2 className="text-xl font-bold text-gray-900">
+              Shopping Cart
+              {cart.length > 0 && (
+                <span className="font-semibold text-gray-600">
+                  {` • ${cart.length} ${cart.length === 1 ? 'item' : 'items'}`}
+                </span>
+              )}
+            </h2>
             <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
               {totalItems.toFixed(1)} kg
             </span>
@@ -99,7 +164,12 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
         </div>
 
         {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div
+          ref={listRef}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-4"
+          onScroll={updateHiddenBelowCount}
+        >
           {cart.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingBag className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -108,7 +178,11 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-xl">
+              <div
+                key={item.id}
+                data-cart-item
+                className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-50 rounded-xl"
+              >
                 <div className="flex items-center space-x-3 flex-1 min-w-0">
                 <img
                   src={getFishImageUrl(item.image)}
@@ -160,10 +234,21 @@ const ShoppingCart = ({ isOpen, onClose, cart, onUpdateCart, onRemoveItem, onCle
             ))
           )}
         </div>
+          {hiddenBelowCount > 0 && (
+            <div className="pointer-events-none flex-shrink-0 border-t border-cyan-200 bg-white px-4 py-2">
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-[#087EA4] bg-[#087EA4] px-3 py-2 shadow-sm">
+                <ChevronDown className="w-5 h-5 text-white flex-shrink-0" aria-hidden="true" />
+                <p className="text-sm font-bold text-white leading-tight">
+                  {`+${hiddenBelowCount} more ${hiddenBelowCount === 1 ? 'item' : 'items'} • Scroll to view more`}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Footer */}
         {cart.length > 0 && (
-          <div className="border-t p-4 space-y-4">
+          <div className="border-t p-4 space-y-4 flex-shrink-0 bg-white">
             {/* Price Breakdown */}
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
