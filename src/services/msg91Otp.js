@@ -428,82 +428,6 @@ export const sendMsg91Otp = async (identifier) => {
   });
 };
 
-/** TEMP DIAGNOSTIC: structure only. Never logs values, OTP, mobile, tokens, or request IDs. */
-const looksLikeJwt = (value) => {
-  if (typeof value !== 'string') return false;
-  const parts = value.trim().split('.');
-  return parts.length === 3 && parts[0].startsWith('eyJ') && parts.every((part) => part.length > 0);
-};
-
-const describeVerifyOtpSuccessShape = (data) => {
-  const lines = [];
-  const isArray = Array.isArray(data);
-  const isObject = data !== null && typeof data === 'object' && !isArray;
-  lines.push(`verifyOtp success type: ${isArray ? 'array' : typeof data}`);
-  lines.push(`is object: ${isObject}`);
-
-  if (isArray) {
-    lines.push('top-level keys: []');
-    lines.push('nested keys:');
-    lines.push('(top-level array; item contents omitted)');
-    lines.push('JWT-like fields:');
-    lines.push('(none)');
-    console.log(lines.join('\n'));
-    return;
-  }
-
-  if (!isObject) {
-    if (typeof data === 'string') {
-      lines.push('top-level keys: []');
-      lines.push('nested keys:');
-      lines.push('(none)');
-      lines.push('JWT-like fields:');
-      lines.push(`(top-level string) = ${looksLikeJwt(data)}`);
-    } else {
-      lines.push('top-level keys: []');
-      lines.push('nested keys:');
-      lines.push('(none)');
-      lines.push('JWT-like fields:');
-      lines.push('(none)');
-    }
-    console.log(lines.join('\n'));
-    return;
-  }
-
-  const topKeys = Object.keys(data);
-  lines.push(`top-level keys: ${JSON.stringify(topKeys)}`);
-  lines.push('nested keys:');
-
-  const nestedLines = [];
-  const jwtLines = [];
-
-  const inspectValue = (value, path, depth) => {
-    if (depth > 4) return;
-    if (typeof value === 'string') {
-      if (looksLikeJwt(value)) jwtLines.push(`${path} = true`);
-      return;
-    }
-    if (Array.isArray(value)) {
-      nestedLines.push(`${path}: array`);
-      return;
-    }
-    if (!value || typeof value !== 'object') return;
-    const keys = Object.keys(value);
-    nestedLines.push(`${path}: ${JSON.stringify(keys)}`);
-    keys.forEach((key) => inspectValue(value[key], `${path}.${key}`, depth + 1));
-  };
-
-  topKeys.forEach((key) => inspectValue(data[key], key, 1));
-
-  if (nestedLines.length === 0) nestedLines.push('(none)');
-  lines.push(...nestedLines);
-  lines.push('JWT-like fields:');
-  if (jwtLines.length === 0) jwtLines.push('(none)');
-  lines.push(...jwtLines);
-
-  console.log(lines.join('\n'));
-};
-
 export const verifyMsg91Otp = (otp, reqId) =>
   new Promise((resolve, reject) => {
     if (typeof window.verifyOtp !== 'function') {
@@ -512,10 +436,7 @@ export const verifyMsg91Otp = (otp, reqId) =>
     }
     const args = [
       otp,
-      (data) => {
-        describeVerifyOtpSuccessShape(data);
-        resolve(data);
-      },
+      (data) => resolve(data),
       (error) =>
         reject(
           new Error(
