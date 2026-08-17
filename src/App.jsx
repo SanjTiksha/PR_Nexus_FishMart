@@ -26,6 +26,8 @@ import {
   DEFAULT_DISCOUNT_SETTINGS,
 } from './utils/cartPricing';
 import { normalizeDeliveryChargeRupees } from './utils/moneyUtils';
+import { auth } from './firebaseConfig';
+import { isDeliveryReadyForPaymentGate } from './services/checkoutCustomerDelivery';
 import { createCustomerOrder, incrementOfferUsage } from './services/firestoreService';
 import {
   normalizeDeliveryPreference,
@@ -483,8 +485,8 @@ function App() {
 
   // Step 1 to Step 2: Proceed to Payment — recalculate & lock amount + payment ref
   const handleProceedToPayment = (deliveryInfo) => {
-    // MSG91 OTP gate — do not start payment without verified checkout mobile
-    if (!deliveryInfo?.mobileVerified || !deliveryInfo?.mobileNumber) {
+    // Payment gate — MSG91 OTP or approved Auth-mobile match. Do not start QR/payment without it.
+    if (!isDeliveryReadyForPaymentGate(auth.currentUser, deliveryInfo)) {
       addNotification(
         'Please verify your mobile number before proceeding to payment.',
         'error',

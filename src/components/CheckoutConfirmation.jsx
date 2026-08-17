@@ -9,6 +9,8 @@ import {
   User,
   ShieldCheck,
 } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebaseConfig';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import { normalizeQuantity, calculateLineTotal } from '../utils/quantityUtils';
 import DeliveryLocationPicker from './DeliveryLocationPicker';
@@ -25,6 +27,18 @@ import {
   toMsg91Identifier,
   verifyMsg91Otp,
 } from '../services/msg91Otp';
+import {
+  ACCOUNT_MOBILE_VERIFIED_LABEL,
+  SAVED_ADDRESSES_LOAD_MESSAGE,
+  SAVED_ADDRESSES_UNAVAILABLE_MESSAGE,
+  canSkipCheckoutOtpForAuthMobile,
+  getAccountMobile10FromUser,
+  isDeliveryReadyForPaymentGate,
+  resolveDefaultSavedAddress,
+  toCheckoutAddressCard,
+  toCheckoutDeliverySnapshot,
+} from '../services/checkoutCustomerDelivery';
+import { getCustomerAddresses } from '../services/customerAddresses';
 import {
   groupAvailableOptionsByDay,
   isTodayDeliveryClosed,
@@ -75,11 +89,19 @@ const CheckoutConfirmation = ({
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaSolved, setCaptchaSolved] = useState(false);
   const [captchaInitError, setCaptchaInitError] = useState('');
+  const [checkoutUser, setCheckoutUser] = useState(null);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressesError, setAddressesError] = useState('');
+  const [locationPickerInitial, setLocationPickerInitial] = useState(null);
 
   const otpInputRef = useRef(null);
   const mobileInputRef = useRef(null);
   const reqIdRef = useRef('');
   const busyRef = useRef(false);
+  const savedAddressesLoadedForUidRef = useRef('');
 
   useEffect(() => {
     if (isOpen) {
@@ -99,8 +121,16 @@ const CheckoutConfirmation = ({
       setCaptchaSolved(false);
       setCaptchaInitError('');
       setDeliverySlotError('');
+      setCheckoutUser(null);
+      setSavedAddresses([]);
+      setSelectedAddressId('');
+      setShowAddressPicker(false);
+      setAddressesLoading(false);
+      setAddressesError('');
+      setLocationPickerInitial(null);
       reqIdRef.current = '';
       busyRef.current = false;
+      savedAddressesLoadedForUidRef.current = '';
       setDeliveryInfo({
         customerName: '',
         mobileNumber: '',
@@ -132,10 +162,16 @@ const CheckoutConfirmation = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, deliveryPreference, availabilityTick]);
 
-  // Init MSG91 only when delivery form (and visible captcha mount) is shown.
+  // Init MSG91 only when delivery form is shown AND checkout OTP is required.
   // H-Captcha often fails if the mount node is display:none during init.
   useEffect(() => {
     if (!isOpen || !showDeliveryForm) return undefined;
+    if (getAccountMobile10FromUser(checkoutUser) && addressesLoading) {
+      return undefined;
+    }
+    if (canSkipCheckoutOtpForAuthMobile(checkoutUser, deliveryInfo.mobileNumber)) {
+      return undefined;
+    }
 
     let cancelled = false;
     const unsub = onMsg91CaptchaChange((ok) => {
@@ -169,7 +205,7 @@ const CheckoutConfirmation = ({
       clearInterval(poll);
       unsub();
     };
-  }, [isOpen, showDeliveryForm]);
+  }, [isOpen, showDeliveryForm, checkoutUser, deliveryInfo.mobileNumber, addressesLoading]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return undefined;
@@ -185,7 +221,32 @@ const CheckoutConfirmation = ({
     }
   }, [showOtpPanel]);
 
-  const resetMobileVerification = () => {
+  useEffect(() => {
+    if (!isOpen || !showDeliveryForm) {
+      return undefined;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCheckoutUser(user || null);
+    });
+    return unsubscribe;
+  }, [isOpen, showDeliveryForm]);
+
+  const syncMobileVerification = (mobile, user) => {
+    const normalized = normalizeIndianMobile(mobile);
+    if (canSkipCheckoutOtpForAuthMobile(user, normalized)) {
+      setMobileVerified(true);
+      setVerifiedMobile(normalized);
+      setShowOtpPanel(false);
+      setOtp('');
+      setOtpError('');
+      setOtpMessage('');
+      setResendSeconds(0);
+      reqIdRef.current = '';
+      return;
+    }
+    if (mobileVerified && verifiedMobile && verifiedMobile === normalized) {
+      return;
+    }
     setMobileVerified(false);
     setVerifiedMobile('');
     setShowOtpPanel(false);
@@ -195,6 +256,79 @@ const CheckoutConfirmation = ({
     setResendSeconds(0);
     reqIdRef.current = '';
   };
+
+  const applySavedAddressSnapshot = (address, user) => {
+    const snapshot = toCheckoutDeliverySnapshot(address);
+    if (!snapshot) return false;
+    setDeliveryInfo((prev) => ({
+      ...prev,
+      customerName: snapshot.customerName,
+      mobileNumber: snapshot.mobileNumber,
+      address: snapshot.address,
+      location: snapshot.location,
+    }));
+    setLocationPickerInitial(snapshot.location);
+    setSelectedAddressId(address.addressId || '');
+    setShowAddressPicker(false);
+    syncMobileVerification(snapshot.mobileNumber, user);
+    return true;
+  };
+
+  useEffect(() => {
+    if (!isOpen || !showDeliveryForm) return undefined;
+    if (!getAccountMobile10FromUser(checkoutUser)) {
+      setSavedAddresses([]);
+      setSelectedAddressId('');
+      setShowAddressPicker(false);
+      setAddressesLoading(false);
+      setAddressesError('');
+      savedAddressesLoadedForUidRef.current = '';
+      return undefined;
+    }
+
+    const uid = checkoutUser.uid;
+    if (savedAddressesLoadedForUidRef.current === uid) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    savedAddressesLoadedForUidRef.current = uid;
+    setAddressesLoading(true);
+    setAddressesError('');
+
+    getCustomerAddresses(checkoutUser)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.status === 'unavailable') {
+          setAddressesError(SAVED_ADDRESSES_UNAVAILABLE_MESSAGE);
+          setSavedAddresses([]);
+          return;
+        }
+        if (result.status !== 'ok') {
+          setSavedAddresses([]);
+          return;
+        }
+        const list = Array.isArray(result.addresses) ? result.addresses : [];
+        setSavedAddresses(list);
+        const defaultAddress = resolveDefaultSavedAddress(list, result.defaultAddressId);
+        if (defaultAddress) {
+          applySavedAddressSnapshot(defaultAddress, checkoutUser);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAddressesError(SAVED_ADDRESSES_UNAVAILABLE_MESSAGE);
+          setSavedAddresses([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAddressesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, showDeliveryForm, checkoutUser]);
 
   const handleProceed = () => {
     setDeliverySlotError('');
@@ -215,9 +349,7 @@ const CheckoutConfirmation = ({
     if (name === 'mobileNumber') {
       const digits = value.replace(/\D/g, '').slice(0, 10);
       setDeliveryInfo((prev) => ({ ...prev, mobileNumber: digits }));
-      if (mobileVerified || showOtpPanel) {
-        resetMobileVerification();
-      }
+      syncMobileVerification(digits, checkoutUser);
       return;
     }
 
@@ -333,7 +465,7 @@ const CheckoutConfirmation = ({
   };
 
   const handleChangeMobile = () => {
-    resetMobileVerification();
+    setShowOtpPanel(false);
     setTimeout(() => mobileInputRef.current?.focus(), 50);
   };
 
@@ -366,29 +498,47 @@ const CheckoutConfirmation = ({
       return;
     }
 
-    // Critical: payment must not start without MSG91 OTP success
-    if (!mobileVerified || verifiedMobile !== mobile) {
+    const authMatch = canSkipCheckoutOtpForAuthMobile(checkoutUser, mobile);
+    const sessionVerified = mobileVerified && verifiedMobile === mobile;
+    if (!authMatch && !sessionVerified) {
+      alert('Please verify your mobile number before proceeding to payment.');
+      return;
+    }
+
+    const payload = {
+      ...deliveryInfo,
+      mobileNumber: mobile,
+      mobileVerified: true,
+      mobileVerifiedAt: new Date().toISOString(),
+      deliveryDate: locked.deliveryDate,
+      deliverySlot: locked.deliverySlot,
+    };
+
+    if (!isDeliveryReadyForPaymentGate(checkoutUser, payload)) {
       alert('Please verify your mobile number before proceeding to payment.');
       return;
     }
 
     if (onProceedToPayment) {
-      onProceedToPayment({
-        ...deliveryInfo,
-        mobileNumber: mobile,
-        mobileVerified: true,
-        mobileVerifiedAt: new Date().toISOString(),
-        deliveryDate: locked.deliveryDate,
-        deliverySlot: locked.deliverySlot,
-      });
+      onProceedToPayment(payload);
     }
   };
 
   if (!isOpen) return null;
 
   const currentMobile = normalizeIndianMobile(deliveryInfo.mobileNumber);
+  const authMatchVerified = canSkipCheckoutOtpForAuthMobile(checkoutUser, currentMobile);
   const isCurrentMobileVerified =
-    mobileVerified && verifiedMobile && verifiedMobile === currentMobile;
+    authMatchVerified ||
+    Boolean(mobileVerified && verifiedMobile && verifiedMobile === currentMobile);
+  const selectedAddress = savedAddresses.find((item) => item.addressId === selectedAddressId);
+  const selectedCard = selectedAddress
+    ? toCheckoutAddressCard(selectedAddress, selectedAddressId)
+    : null;
+  const accountMobile10 = getAccountMobile10FromUser(checkoutUser);
+  const showSavedAddressUi = Boolean(accountMobile10);
+  const deliveryMobileDiffers =
+    Boolean(accountMobile10 && currentMobile && currentMobile !== accountMobile10);
 
   return (
     <div
@@ -586,6 +736,143 @@ const CheckoutConfirmation = ({
                   </div>
                 </div>
 
+                {showSavedAddressUi ? (
+                  <div className="space-y-3 min-w-0">
+                    {addressesLoading ? (
+                      <p className="text-sm text-gray-600">{SAVED_ADDRESSES_LOAD_MESSAGE}</p>
+                    ) : null}
+                    {addressesError ? (
+                      <p className="text-sm text-gray-600" role="status">
+                        {addressesError}
+                      </p>
+                    ) : null}
+
+                    {!addressesLoading && selectedCard && !showAddressPicker ? (
+                      <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4 min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          Delivery address
+                        </p>
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                          <p className="min-w-0 truncate text-base font-bold text-gray-900">
+                            {selectedCard.label}
+                          </p>
+                          {selectedCard.locationConfirmed ? (
+                            <span className="shrink-0 text-green-700" aria-label="Location confirmed">
+                              ✓
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 break-words font-semibold text-gray-900">
+                          {selectedCard.fullName}
+                        </p>
+                        {selectedCard.mobileMasked ? (
+                          <p className="text-sm text-gray-700">{selectedCard.mobileMasked}</p>
+                        ) : null}
+                        <p className="mt-1 break-words text-sm text-gray-700">{selectedCard.address}</p>
+                        <p className="mt-2 text-xs font-semibold text-green-800">
+                          {selectedCard.locationConfirmed
+                            ? '✓ Location confirmed'
+                            : 'Location needed'}
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddressPicker(true)}
+                            className="min-h-[48px] rounded-2xl border border-gray-200 bg-white px-3 text-sm font-bold text-gray-900"
+                          >
+                            Change
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedAddressId('');
+                              setShowAddressPicker(false);
+                            }}
+                            className="min-h-[48px] rounded-2xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900"
+                          >
+                            Use another address
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {!addressesLoading && showAddressPicker ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-semibold text-gray-800">Choose a saved address</p>
+                        {savedAddresses.map((address) => {
+                          const card = toCheckoutAddressCard(address, selectedAddressId);
+                          if (!card) return null;
+                          return (
+                            <button
+                              key={card.addressId}
+                              type="button"
+                              onClick={() => applySavedAddressSnapshot(address, checkoutUser)}
+                              className={`w-full min-h-[48px] rounded-2xl border p-4 text-left min-w-0 ${
+                                card.selected
+                                  ? 'border-[#087EA4] bg-cyan-50'
+                                  : 'border-gray-200 bg-white'
+                              }`}
+                            >
+                              <p className="truncate font-bold text-gray-900">{card.label}</p>
+                              <p className="break-words text-sm font-semibold text-gray-800">
+                                {card.fullName}
+                              </p>
+                              {card.mobileMasked ? (
+                                <p className="text-sm text-gray-700">{card.mobileMasked}</p>
+                              ) : null}
+                              <p className="break-words text-sm text-gray-700">{card.address}</p>
+                              <p className="mt-1 text-xs font-semibold text-green-800">
+                                {card.locationConfirmed
+                                  ? '✓ Location confirmed'
+                                  : 'Location needed'}
+                              </p>
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAddressId('');
+                            setShowAddressPicker(false);
+                          }}
+                          className="flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-900"
+                        >
+                          Use another address
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {!addressesLoading &&
+                    !showAddressPicker &&
+                    !selectedCard &&
+                    savedAddresses.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowAddressPicker(true)}
+                        className="flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-900"
+                      >
+                        Use saved address
+                      </button>
+                    ) : null}
+
+                    {!addressesLoading &&
+                    !showAddressPicker &&
+                    !selectedCard &&
+                    savedAddresses.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedAddressId('');
+                          setShowAddressPicker(false);
+                        }}
+                        className="flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-[#087EA4] px-4 text-sm font-bold text-white"
+                      >
+                        Add new address
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <form onSubmit={handleDeliverySubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -607,8 +894,13 @@ const CheckoutConfirmation = ({
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       <Phone className="w-4 h-4 inline mr-1" />
-                      Mobile Number *
+                      {deliveryMobileDiffers ? 'Delivery mobile *' : 'Mobile Number *'}
                     </label>
+                    {deliveryMobileDiffers ? (
+                      <p className="mb-2 text-xs text-gray-600">
+                        This number is different from your account mobile. Verify it with OTP.
+                      </p>
+                    ) : null}
                     <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3">
                       <input
                         ref={mobileInputRef}
@@ -624,7 +916,8 @@ const CheckoutConfirmation = ({
                         required
                         disabled={showOtpPanel && !isCurrentMobileVerified}
                       />
-                      {!isCurrentMobileVerified && (
+                      {!isCurrentMobileVerified &&
+                        !(showSavedAddressUi && addressesLoading) && (
                         <button
                           type="button"
                           onClick={handleSendOtp}
@@ -645,7 +938,8 @@ const CheckoutConfirmation = ({
                           {sendingOtp ? 'Sending…' : 'Verify Mobile'}
                         </button>
                       )}
-                      {!isCurrentMobileVerified && (
+                      {!isCurrentMobileVerified &&
+                        !(showSavedAddressUi && addressesLoading) && (
                         <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
                           <p className="text-sm font-semibold text-gray-800">Security check</p>
                           <p className="text-xs text-gray-600">
@@ -676,12 +970,16 @@ const CheckoutConfirmation = ({
                     {isCurrentMobileVerified && (
                       <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
                         <ShieldCheck className="w-4 h-4 flex-shrink-0" />
-                        <span className="font-medium">Mobile Verified ✓</span>
-                        <span className="text-green-700">{maskMobile(verifiedMobile)}</span>
+                        <span className="font-medium">
+                          {authMatchVerified
+                            ? ACCOUNT_MOBILE_VERIFIED_LABEL
+                            : 'Mobile Verified ✓'}
+                        </span>
+                        <span className="text-green-700">{maskMobile(verifiedMobile || currentMobile)}</span>
                         <button
                           type="button"
                           onClick={handleChangeMobile}
-                          className="ml-auto text-xs font-semibold text-blue-700 underline"
+                          className="ml-auto text-xs font-semibold text-blue-700 underline min-h-[44px] px-1"
                         >
                           Change
                         </button>
@@ -760,7 +1058,8 @@ const CheckoutConfirmation = ({
                   )}
 
                   <DeliveryLocationPicker
-                    key="delivery-location-picker"
+                    key={selectedAddressId || 'manual-delivery-location'}
+                    initialLocation={locationPickerInitial}
                     onChange={(location) => {
                       setDeliveryInfo((prev) => ({ ...prev, location }));
                     }}
