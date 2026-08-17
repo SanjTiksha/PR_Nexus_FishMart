@@ -19,6 +19,9 @@ import {
   deleteDoc,
   addDoc,
   collection,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -73,6 +76,7 @@ const main = async () => {
   const customerUid = 'phone_919876543210';
   const otherCustomerUid = 'phone_919999999999';
   const customer = testEnv.authenticatedContext(customerUid).firestore();
+  const otherCustomer = testEnv.authenticatedContext(otherCustomerUid).firestore();
 
   // Public reads
   await check('3. public catalog read', () => assertSucceeds(getDoc(doc(anon, 'fishes', 'f1'))));
@@ -188,14 +192,72 @@ const main = async () => {
     ),
   );
 
-  await check('authenticated customer cannot read orders', () =>
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'orders', 'ORDER_OTHER_OWNED'), {
+      orderId: 'ORDER_OTHER_OWNED',
+      paymentStatus: 'PENDING_CONFIRMATION',
+      paidVerified: false,
+      customerUid: otherCustomerUid,
+    });
+  });
+
+  await check('customer can read own order', () =>
+    assertSucceeds(getDoc(doc(customer, 'orders', 'ORDER_CUST_OWN'))),
+  );
+  await check('customer cannot read another customer order', () =>
+    assertFails(getDoc(doc(customer, 'orders', 'ORDER_OTHER_OWNED'))),
+  );
+  await check('customer cannot read guest order', () =>
+    assertFails(getDoc(doc(customer, 'orders', 'ORDER_NEW_1'))),
+  );
+  await check('customer cannot read historical order without customerUid', () =>
     assertFails(getDoc(doc(customer, 'orders', 'ORDER_EXISTING'))),
   );
-  await check('authenticated customer cannot read own new order', () =>
-    assertFails(getDoc(doc(customer, 'orders', 'ORDER_CUST_OWN'))),
+  await check('guest cannot read customer order', () =>
+    assertFails(getDoc(doc(anon, 'orders', 'ORDER_CUST_OWN'))),
+  );
+  await check('other customer cannot read first customer order', () =>
+    assertFails(getDoc(doc(otherCustomer, 'orders', 'ORDER_CUST_OWN'))),
+  );
+  await check('customer can query own orders', () =>
+    assertSucceeds(
+      getDocs(
+        query(
+          collection(customer, 'orders'),
+          where('customerUid', '==', customerUid),
+          limit(50),
+        ),
+      ),
+    ),
+  );
+  await check('customer cannot list all orders', () =>
+    assertFails(getDocs(collection(customer, 'orders'))),
+  );
+  await check('customer cannot query another customerUid', () =>
+    assertFails(
+      getDocs(
+        query(
+          collection(customer, 'orders'),
+          where('customerUid', '==', otherCustomerUid),
+          limit(50),
+        ),
+      ),
+    ),
+  );
+  await check('customer cannot update own order', () =>
+    assertFails(
+      updateDoc(doc(customer, 'orders', 'ORDER_CUST_OWN'), {
+        paymentStatus: 'VERIFIED',
+        paidVerified: true,
+      }),
+    ),
+  );
+  await check('customer cannot delete own order', () =>
+    assertFails(deleteDoc(doc(customer, 'orders', 'ORDER_CUST_OWN'))),
   );
 
-  // Customer cannot read/update/delete orders
+  // Customer cannot read/update/delete guest or historical orders
   await check('7. customer cannot read orders', () =>
     assertFails(getDoc(doc(anon, 'orders', 'ORDER_EXISTING'))),
   );
@@ -250,6 +312,9 @@ const main = async () => {
   // Admin can manage
   await check('14. admin can read orders', () =>
     assertSucceeds(getDoc(doc(admin, 'orders', 'ORDER_EXISTING'))),
+  );
+  await check('admin can read customer-owned order', () =>
+    assertSucceeds(getDoc(doc(admin, 'orders', 'ORDER_CUST_OWN'))),
   );
   await check('14b. admin can update fish rates', () =>
     assertSucceeds(updateDoc(doc(admin, 'fishes', 'f1'), { rate: 550 })),

@@ -11,7 +11,6 @@ import {
 } from '../services/customerProfile';
 
 const COMING_SOON_NAV = [
-  { id: 'orders', emoji: '📦', label: 'My Orders', hint: 'View your FishMart orders' },
   { id: 'reorder', emoji: '🔄', label: 'Buy Again', hint: 'Quickly reorder your favourites' },
   { id: 'favourites', emoji: '❤️', label: 'Favourites', hint: 'Your saved fish & seafood' },
   { id: 'addresses', emoji: '📍', label: 'Addresses', hint: 'Manage delivery addresses' },
@@ -125,6 +124,15 @@ const Account = () => {
                     Overview
                   </span>
                 </li>
+                <li>
+                  <Link
+                    to="/account/orders"
+                    className="flex items-center gap-3 px-3 py-3 min-h-[48px] rounded-xl text-gray-800 font-medium hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                  >
+                    <span aria-hidden="true">📦</span>
+                    My Orders
+                  </Link>
+                </li>
                 {COMING_SOON_NAV.map((item) => (
                   <ComingSoonRow key={item.id} item={item} />
                 ))}
@@ -188,6 +196,20 @@ const Account = () => {
                   Account
                 </h2>
                 <ul>
+                  <li>
+                    <Link
+                      to="/account/orders"
+                      className="flex items-center justify-between gap-3 min-h-[48px] px-3 py-2 rounded-xl font-medium text-gray-800 hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span aria-hidden="true">📦</span>
+                        <span className="truncate">My Orders</span>
+                      </span>
+                      <span className="shrink-0 text-gray-400" aria-hidden="true">
+                        ›
+                      </span>
+                    </Link>
+                  </li>
                   {COMING_SOON_NAV.map((item) => (
                     <ComingSoonRow key={item.id} item={item} />
                   ))}
@@ -200,9 +222,19 @@ const Account = () => {
               aria-labelledby="account-actions-heading"
             >
               <h2 id="account-actions-heading" className="text-lg font-bold text-gray-900 mb-3">
-                Coming soon
+                Account
               </h2>
               <div className="grid grid-cols-2 gap-4">
+                <Link
+                  to="/account/orders"
+                  className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 sm:p-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                >
+                  <p className="text-2xl" aria-hidden="true">
+                    📦
+                  </p>
+                  <h3 className="mt-3 text-lg font-bold text-gray-900">My Orders</h3>
+                  <p className="mt-1 text-sm text-gray-600">View your FishMart orders</p>
+                </Link>
                 {COMING_SOON_NAV.filter((item) => item.id !== 'rewards').map((item) => (
                   <div
                     key={item.id}

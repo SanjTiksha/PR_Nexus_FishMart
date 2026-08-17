@@ -80,7 +80,8 @@ service cloud.firestore {
 
     // ---------- Customer orders ----------
     // Unauthenticated customers may CREATE a new order document only.
-    // No public read / update / delete (prevents cross-customer access & payment tampering).
+    // Customers may READ only documents they own (customerUid == request.auth.uid).
+    // No public update / delete (prevents payment tampering).
 
     match /orders/{orderId} {
       allow create: if
@@ -98,7 +99,14 @@ service cloud.firestore {
           )
         );
 
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin()
+        || (
+          isCustomerAuth()
+          && 'customerUid' in resource.data
+          && resource.data.customerUid == request.auth.uid
+        );
+
+      allow update, delete: if isAdmin();
     }
 
     // ---------- Customer profiles (Phase 1A.7) ----------
