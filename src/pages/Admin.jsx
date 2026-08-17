@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import AdminLogin from '../components/AdminLogin';
 import AdminPanel from '../components/AdminPanel';
@@ -8,7 +9,7 @@ import { isAuthorizedAdminUser } from '../utils/adminAuth';
 const Admin = ({ fishData, refreshFishData }) => {
   const [authReady, setAuthReady] = useState(false);
   const [adminUser, setAdminUser] = useState(null);
-  const [authError, setAuthError] = useState('');
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Clear legacy localStorage admin flags (never used as auth truth)
   useEffect(() => {
@@ -21,29 +22,22 @@ const Admin = ({ fishData, refreshFishData }) => {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
         setAdminUser(null);
+        setAccessDenied(false);
         setAuthReady(true);
-        // Keep authError if we just denied/signed out an unauthorized account
         return;
       }
 
       if (!isAuthorizedAdminUser(user)) {
         setAdminUser(null);
+        setAccessDenied(true);
         setAuthReady(true);
-        setAuthError(
-          'This account is not authorized for admin access. Please use a management email.',
-        );
-        try {
-          await signOut(auth);
-        } catch {
-          /* ignore */
-        }
         return;
       }
 
-      setAuthError('');
+      setAccessDenied(false);
       setAdminUser(user);
       setAuthReady(true);
     });
@@ -52,7 +46,6 @@ const Admin = ({ fishData, refreshFishData }) => {
   }, []);
 
   const handleLogout = async () => {
-    setAuthError('');
     try {
       localStorage.removeItem('isAdmin');
       localStorage.removeItem('adminMode');
@@ -73,8 +66,31 @@ const Admin = ({ fishData, refreshFishData }) => {
     );
   }
 
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen bg-cyan-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🔐</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">Access denied</h2>
+            <p className="mt-2 text-gray-600">
+              This account is not authorized for admin access. Please use a management email.
+            </p>
+          </div>
+          <div className="card p-8 text-center">
+            <Link to="/" className="inline-flex w-full btn-primary text-lg py-3 justify-center">
+              Return to FishMart
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!adminUser) {
-    return <AdminLogin authError={authError} onClearAuthError={() => setAuthError('')} />;
+    return <AdminLogin />;
   }
 
   return (
