@@ -39,6 +39,7 @@ const Contact = lazy(() => import('./pages/Contact'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Login = lazy(() => import('./pages/Login'));
+const Account = lazy(() => import('./pages/Account'));
 const CheckoutConfirmation = lazy(() => import('./components/CheckoutConfirmation'));
 const QRModal = lazy(() => import('./components/QRModal'));
 const TransactionSuccess = lazy(() => import('./components/TransactionSuccess'));
@@ -773,6 +774,7 @@ function App() {
             <Route path="/contact" element={<Contact shopInfo={fishData.shopInfo} />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy shopInfo={fishData.shopInfo} />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/admin" element={<Admin fishData={fishData} refreshFishData={refreshFishData} />} />
             </Routes>
           </Suspense>

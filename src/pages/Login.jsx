@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { signInWithCustomToken } from 'firebase/auth';
+import { onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
+import EnhancedLoadingSpinner from '../components/EnhancedLoadingSpinner';
+import { isCustomerUser } from '../services/customerSession';
 import {
   initializeCustomerLoginOtp,
   isCustomerLoginCaptchaVerified,
@@ -40,6 +42,8 @@ const Login = () => {
   const [captchaReady, setCaptchaReady] = useState(false);
   const [captchaSolved, setCaptchaSolved] = useState(false);
   const [captchaInitError, setCaptchaInitError] = useState('');
+  const [authReady, setAuthReady] = useState(false);
+  const [existingUser, setExistingUser] = useState(null);
 
   const otpInputRef = useRef(null);
   const mobileInputRef = useRef(null);
@@ -49,6 +53,24 @@ const Login = () => {
   const busyRef = useRef(false);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setExistingUser(user);
+      setAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return undefined;
+    if (isCustomerUser(existingUser)) {
+      navigate('/account', { replace: true });
+    }
+    return undefined;
+  }, [authReady, existingUser, navigate]);
+
+  useEffect(() => {
+    if (!authReady || isCustomerUser(existingUser)) return undefined;
+
     let cancelled = false;
     const unsub = onCustomerLoginCaptchaChange((ok) => {
       if (!cancelled) setCaptchaSolved(!!ok);
@@ -80,7 +102,7 @@ const Login = () => {
       clearInterval(poll);
       unsub();
     };
-  }, []);
+  }, [authReady, existingUser]);
 
   useEffect(() => {
     return () => {
@@ -242,7 +264,7 @@ const Login = () => {
       setOtp('');
       setOtpError('');
       setResendSeconds(0);
-      navigate('/', { replace: true });
+      navigate('/account', { replace: true });
     } catch {
       verifiedTokenRef.current = '';
       customTokenRef.current = '';
@@ -284,6 +306,10 @@ const Login = () => {
   };
 
   const mobileValid = isValidIndianMobile(normalizeIndianMobile(mobileNumber));
+
+  if (!authReady || isCustomerUser(existingUser)) {
+    return <EnhancedLoadingSpinner message="Loading your account..." size="large" />;
+  }
 
   return (
     <div className="min-h-screen bg-cyan-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">

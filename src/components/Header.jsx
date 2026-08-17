@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
+import { isAuthorizedAdminUser } from '../utils/adminAuth';
+import { isCustomerUser } from '../services/customerSession';
 
 const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -15,8 +17,13 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
     return () => unsubscribe();
   }, []);
 
-  const authNavLabel = firebaseUser ? 'Account' : 'Login';
-  const authNavActive = location.pathname === '/login';
+  const isAdminUser = isAuthorizedAdminUser(firebaseUser);
+  const isCustomer = isCustomerUser(firebaseUser);
+  const authNavLabel = isCustomer ? 'Account' : 'Login';
+  const authNavTo = isCustomer ? '/account' : '/login';
+  const onAccountPath =
+    location.pathname === '/account' || location.pathname.startsWith('/account/');
+  const authNavActive = isCustomer ? onAccountPath : location.pathname === '/login';
 
   const navItems = [
     { path: '/', label: 'Fish' },
@@ -66,13 +73,15 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
               );
             })}
 
-            <Link
-              to="/login"
-              className={`fm-nav-link ${authNavActive ? 'fm-nav-link--active' : ''}`}
-            >
-              <span className="fm-nav-link-label">{authNavLabel}</span>
-              <span className="fm-nav-link-underline" aria-hidden="true" />
-            </Link>
+            {!isAdminUser && (
+              <Link
+                to={authNavTo}
+                className={`fm-nav-link ${authNavActive ? 'fm-nav-link--active' : ''}`}
+              >
+                <span className="fm-nav-link-label">{authNavLabel}</span>
+                <span className="fm-nav-link-underline" aria-hidden="true" />
+              </Link>
+            )}
 
             <a
               href={`https://wa.me/${shopInfo.whatsapp || shopInfo.phone.replace(/[^0-9]/g, '')}`}
@@ -171,13 +180,15 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                 );
               })}
 
-              <Link
-                to="/login"
-                className={`fm-mobile-nav-link ${authNavActive ? 'fm-mobile-nav-link--active' : ''}`}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {authNavLabel}
-              </Link>
+              {!isAdminUser && (
+                <Link
+                  to={authNavTo}
+                  className={`fm-mobile-nav-link ${authNavActive ? 'fm-mobile-nav-link--active' : ''}`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {authNavLabel}
+                </Link>
+              )}
 
               <a
                 href={`https://wa.me/${shopInfo.whatsapp || shopInfo.phone.replace(/[^0-9]/g, '')}`}
