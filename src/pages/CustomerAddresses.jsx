@@ -61,6 +61,7 @@ const CustomerAddresses = () => {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const [setAsDefault, setSetAsDefault] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -102,6 +103,7 @@ const CustomerAddresses = () => {
     setLocation(null);
     setInitialMapLocation(null);
     setFormError('');
+    setSetAsDefault(false);
     setMode('form');
   };
 
@@ -117,6 +119,7 @@ const CustomerAddresses = () => {
     setLocation(address.location || null);
     setInitialMapLocation(address.location || null);
     setFormError('');
+    setSetAsDefault(address.addressId === defaultAddressId);
     setMode('form');
   };
 
@@ -127,6 +130,7 @@ const CustomerAddresses = () => {
     setLocation(null);
     setInitialMapLocation(null);
     setFormError('');
+    setSetAsDefault(false);
   };
 
   const handleSave = async (event) => {
@@ -145,6 +149,16 @@ const CustomerAddresses = () => {
         : await createCustomerAddress(firebaseUser, input);
 
       if (result.status === 'ok') {
+        const shouldSetDefault =
+          Boolean(editingId) && setAsDefault && editingId !== defaultAddressId;
+        if (shouldSetDefault) {
+          const defaultResult = await setDefaultCustomerAddress(firebaseUser, editingId);
+          if (defaultResult.status !== 'ok') {
+            setFormError(ADDRESSES_UNAVAILABLE_MESSAGE);
+            await loadAddresses(firebaseUser);
+            return;
+          }
+        }
         closeForm();
         await loadAddresses(firebaseUser);
         return;
@@ -381,6 +395,30 @@ const CustomerAddresses = () => {
                     <p className="text-sm text-red-700" role="alert">
                       {formError}
                     </p>
+                  ) : null}
+
+                  {editingId ? (
+                    editingId === defaultAddressId ? (
+                      <div
+                        className="flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-[#087EA4] bg-cyan-50 px-4 text-sm font-semibold text-gray-900"
+                        aria-current="true"
+                      >
+                        Default address
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSetAsDefault((current) => !current)}
+                        aria-pressed={setAsDefault}
+                        className={`flex w-full min-h-[48px] items-center justify-center rounded-2xl border px-4 text-sm font-semibold ${
+                          setAsDefault
+                            ? 'border-[#087EA4] bg-cyan-50 text-gray-900'
+                            : 'border-gray-200 bg-white text-gray-900'
+                        }`}
+                      >
+                        Set as default address
+                      </button>
+                    )
                   ) : null}
 
                   <button

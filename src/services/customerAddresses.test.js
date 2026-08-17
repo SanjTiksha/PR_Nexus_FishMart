@@ -181,6 +181,7 @@ describe('address validation', () => {
     assert.notEqual(payload.mobile10, VALID_MOBILE10);
     assert.equal(Object.hasOwn(payload, 'customerMobile10'), false);
     assert.equal(Object.hasOwn(payload, 'customerUid'), false);
+    assert.equal(Object.hasOwn(payload, 'isDefault'), false);
   });
 });
 
@@ -210,6 +211,11 @@ describe('customerAddresses service', () => {
     assert.equal(updated.address.fullName, 'Office Reception');
     assert.equal(updated.address.label, 'Office');
     assert.equal(updated.address.createdAt, 'SERVER_TIMESTAMP');
+    assert.equal(Object.hasOwn(updated.address, 'isDefault'), false);
+    assert.equal(
+      deps.store.get(`customers/${VALID_UID}`).defaultAddressId,
+      created.address.addressId,
+    );
 
     const deleted = await deleteCustomerAddress(VALID_USER, created.address.addressId, deps);
     assert.equal(deleted.status, 'ok');
@@ -338,7 +344,61 @@ describe('customerAddresses service', () => {
     assert.match(accountSource, /to="\/account\/addresses"/);
     assert.match(pageSource, /getAccountRedirectPath/);
     assert.equal(pageSource.includes('createCustomerOrder'), false);
-    assert.equal(checkoutSource.includes('getCustomerAddresses'), false);
+    assert.match(checkoutSource, /getCustomerAddresses/);
     assert.equal(checkoutSource.includes('createCustomerAddress'), false);
+  });
+});
+
+describe('edit address default selection', () => {
+  it('shows a 48px default-address control in the edit form', () => {
+    assert.match(pageSource, /editingId \? 'Edit address'/);
+    assert.match(pageSource, /Set as default address/);
+    assert.match(pageSource, /Default address/);
+    assert.match(pageSource, /editingId === defaultAddressId/);
+    assert.match(pageSource, /min-h-\[48px\]/);
+  });
+
+  it('does not write isDefault on the address document from the edit form', () => {
+    assert.match(
+      pageSource,
+      /const input = \{\s*\.\.\.form,\s*mobile10: digitsOnly\(form\.mobile10\),\s*location,\s*\}/,
+    );
+    assert.equal(pageSource.includes('isDefault:'), false);
+    const payload = buildCustomerAddressPayload(validInput, 'addr_1', {
+      createdAt: 'C',
+      updatedAt: 'U',
+    });
+    assert.equal(Object.hasOwn(payload, 'isDefault'), false);
+  });
+
+  it('leaves the existing default unchanged unless the edited address is selected', () => {
+    assert.match(pageSource, /setAsDefault && editingId !== defaultAddressId/);
+    assert.match(pageSource, /setDefaultCustomerAddress\(firebaseUser, editingId\)/);
+  });
+
+  it('uses the existing default-pointer helper when a non-default address is selected', async () => {
+    const deps = createMemoryDeps();
+    seedProfile(deps);
+    const first = await createCustomerAddress(VALID_USER, validInput, deps);
+    const second = await createCustomerAddress(
+      VALID_USER,
+      { ...validInput, label: 'Office', fullName: 'Office Desk' },
+      deps,
+    );
+    assert.equal(
+      deps.store.get(`customers/${VALID_UID}`).defaultAddressId,
+      first.address.addressId,
+    );
+
+    const switched = await setDefaultCustomerAddress(VALID_USER, second.address.addressId, deps);
+    assert.equal(switched.status, 'ok');
+    assert.equal(
+      deps.store.get(`customers/${VALID_UID}`).defaultAddressId,
+      second.address.addressId,
+    );
+    assert.equal(
+      Object.hasOwn(deps.store.get(`customers/${VALID_UID}/addresses/${second.address.addressId}`), 'isDefault'),
+      false,
+    );
   });
 });
