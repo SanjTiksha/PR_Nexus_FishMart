@@ -4,15 +4,14 @@ const { initializeApp, getApps } = require('firebase-admin/app');
 const { onRequest } = require('firebase-functions/v2/https');
 const { handleCustomerMsg91Session } = require('./src/customerMsg91Session');
 
-// Required by the Functions runtime/emulator. Phase 1A.2 does not mint
-// Custom Tokens or use firebase-admin Auth.
+// Required by the Functions runtime. Auth is used only to mint Custom Tokens.
 if (getApps().length === 0) {
   initializeApp();
 }
 
 /**
  * HTTPS function: POST { "token": "<MSG91 verified token>" }
- * Success: { "ok": true }
+ * Success: { "customToken": "<Firebase Custom Token>" }
  *
  * CORS is handled inside the handler with an explicit origin allowlist.
  * firebase-functions cors is disabled so this never sends *.

@@ -1,5 +1,6 @@
 'use strict';
 
+const { getAuth } = require('firebase-admin/auth');
 const { getMsg91AuthKey } = require('./config');
 const {
   GENERIC,
@@ -9,11 +10,16 @@ const {
 } = require('./http');
 const { validateSessionRequest } = require('./requestValidation');
 const { verifyAccessToken } = require('./msg91Client');
-const { isMsg91VerificationSuccess } = require('./msg91VerifyResult');
+const {
+  extractVerifiedIdentifier,
+  isMsg91VerificationSuccess,
+} = require('./msg91VerifyResult');
+
+const mintCustomToken = async (uid) => getAuth().createCustomToken(uid);
 
 /**
- * Phase 1A.2: MSG91 verified token → server verifyAccessToken → { ok: true }.
- * Does not mint Custom Tokens, persist sessions, or return identifiers.
+ * Phase 1A.3: MSG91 verified token → verifyAccessToken → message → Custom Token.
+ * Does not persist sessions, return the mobile, or change Firestore rules.
  */
 const verifyCustomerMsg91Token = async (token, deps = {}) => {
   const authkey = deps.authkey ?? getMsg91AuthKey(deps.env);
@@ -34,7 +40,22 @@ const verifyCustomerMsg91Token = async (token, deps = {}) => {
   if (!isMsg91VerificationSuccess(upstream.status, upstream.body)) {
     return { ok: false, code: 'rejected' };
   }
-  return { ok: true };
+
+  const identity = extractVerifiedIdentifier(upstream.body);
+  if (!identity.ok) {
+    return { ok: false, code: 'rejected' };
+  }
+
+  try {
+    const createCustomToken = deps.createCustomToken ?? mintCustomToken;
+    const customToken = await createCustomToken(identity.uid);
+    if (typeof customToken !== 'string' || !customToken.trim()) {
+      return { ok: false, code: 'token' };
+    }
+    return { ok: true, customToken: customToken.trim() };
+  } catch {
+    return { ok: false, code: 'token' };
+  }
 };
 
 const handleCustomerMsg91Session = async (req, res, deps = {}) => {
@@ -64,11 +85,15 @@ const handleCustomerMsg91Session = async (req, res, deps = {}) => {
 
   const result = await verifyCustomerMsg91Token(parsed.token, deps);
   if (result.ok) {
-    sendJson(res, 200, { ok: true });
+    sendJson(res, 200, { customToken: result.customToken });
     return;
   }
   if (result.code === 'rejected') {
     sendJson(res, 401, { error: GENERIC.verificationFailed });
+    return;
+  }
+  if (result.code === 'token') {
+    sendJson(res, 500, { error: GENERIC.unavailable });
     return;
   }
   sendJson(res, 502, { error: GENERIC.unavailable });

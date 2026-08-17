@@ -28,17 +28,30 @@ describe('isMsg91VerificationSuccess', () => {
 });
 
 describe('extractVerifiedIdentifier', () => {
-  it('fails closed and does not guess identifier fields', () => {
+  it('reads only message from a documented success body', () => {
+    const result = extractVerifiedIdentifier({
+      type: 'success',
+      message: '919999999999',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.uid, 'phone_919999999999');
+  });
+
+  it('fails closed when message is missing or empty', () => {
+    assert.equal(extractVerifiedIdentifier({ type: 'success' }).ok, false);
+    assert.equal(extractVerifiedIdentifier({ type: 'success', message: '' }).ok, false);
+    assert.equal(extractVerifiedIdentifier({ type: 'success', message: '   ' }).ok, false);
+  });
+
+  it('does not use guessed identifier fields', () => {
     const result = extractVerifiedIdentifier({
       type: 'success',
       mobile: '9876543210',
       identifier: '919876543210',
-      message: 'ok',
       token: 'nope',
       accessToken: 'nope',
       data: { mobile: '9876543210' },
     });
     assert.equal(result.ok, false);
-    assert.match(result.reason, /pending confirmation/i);
   });
 });

@@ -44,6 +44,23 @@ const mockReq = ({ method = 'POST', origin, contentType, body } = {}) => {
 };
 
 const localOrigin = 'http://localhost:5173';
+const MOCK_CUSTOM_TOKEN = 'firebase-custom-token-mock';
+
+const successDeps = {
+  env: {
+    MSG91_AUTHKEY: 'test-authkey',
+    ALLOWED_ORIGINS: localOrigin,
+  },
+  verifyAccessToken: async () => ({
+    kind: 'http',
+    status: 200,
+    body: { type: 'success', message: '919999999999' },
+  }),
+  createCustomToken: async (uid) => {
+    assert.equal(uid, 'phone_919999999999');
+    return MOCK_CUSTOM_TOKEN;
+  },
+};
 
 describe('verifyCustomerMsg91Token', () => {
   it('does not call MSG91 when AuthKey is missing', async () => {
@@ -52,23 +69,96 @@ describe('verifyCustomerMsg91Token', () => {
       env: {},
       verifyAccessToken: async () => {
         called = true;
-        return { kind: 'http', status: 200, body: { type: 'success' } };
+        return {
+          kind: 'http',
+          status: 200,
+          body: { type: 'success', message: '919999999999' },
+        };
       },
+      createCustomToken: async () => MOCK_CUSTOM_TOKEN,
     });
     assert.equal(called, false);
     assert.deepEqual(result, { ok: false, code: 'unavailable' });
   });
 
-  it('returns ok when mocked MSG91 reports success', async () => {
+  it('returns a custom token for a documented MSG91 success body', async () => {
     const result = await verifyCustomerMsg91Token('widget-token', {
       authkey: 'test-authkey',
       verifyAccessToken: async ({ authkey, accessToken }) => {
         assert.equal(authkey, 'test-authkey');
         assert.equal(accessToken, 'widget-token');
-        return { kind: 'http', status: 200, body: { type: 'success' } };
+        return {
+          kind: 'http',
+          status: 200,
+          body: { type: 'success', message: '919999999999' },
+        };
+      },
+      createCustomToken: async (uid) => {
+        assert.equal(uid, 'phone_919999999999');
+        return MOCK_CUSTOM_TOKEN;
       },
     });
-    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(result, { ok: true, customToken: MOCK_CUSTOM_TOKEN });
+  });
+
+  it('normalizes a 10-digit message to the same UID', async () => {
+    let mintedUid;
+    const result = await verifyCustomerMsg91Token('widget-token', {
+      authkey: 'test-authkey',
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success', message: '9999999999' },
+      }),
+      createCustomToken: async (uid) => {
+        mintedUid = uid;
+        return MOCK_CUSTOM_TOKEN;
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(mintedUid, 'phone_919999999999');
+  });
+
+  it('rejects missing message', async () => {
+    const result = await verifyCustomerMsg91Token('widget-token', {
+      authkey: 'test-authkey',
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success' },
+      }),
+      createCustomToken: async () => MOCK_CUSTOM_TOKEN,
+    });
+    assert.deepEqual(result, { ok: false, code: 'rejected' });
+  });
+
+  it('rejects empty message', async () => {
+    const result = await verifyCustomerMsg91Token('widget-token', {
+      authkey: 'test-authkey',
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success', message: '   ' },
+      }),
+      createCustomToken: async () => MOCK_CUSTOM_TOKEN,
+    });
+    assert.deepEqual(result, { ok: false, code: 'rejected' });
+  });
+
+  it('rejects invalid mobile and email identifiers', async () => {
+    const invalidMessages = ['user@example.com', '5123456789', '91'];
+    for (const message of invalidMessages) {
+      const result = await verifyCustomerMsg91Token('widget-token', {
+        authkey: 'test-authkey',
+        verifyAccessToken: async () => ({
+          kind: 'http',
+          status: 200,
+          body: { type: 'success', message },
+        }),
+        createCustomToken: async () => MOCK_CUSTOM_TOKEN,
+      });
+      assert.deepEqual(result, { ok: false, code: 'rejected' });
+    }
   });
 
   it('rejects mocked MSG91 non-success without exposing the body', async () => {
@@ -79,9 +169,26 @@ describe('verifyCustomerMsg91Token', () => {
         status: 200,
         body: { type: 'error', message: 'secret-upstream' },
       }),
+      createCustomToken: async () => MOCK_CUSTOM_TOKEN,
     });
     assert.deepEqual(result, { ok: false, code: 'rejected' });
     assert.equal(JSON.stringify(result).includes('secret-upstream'), false);
+  });
+
+  it('returns token failure when custom-token minting throws', async () => {
+    const result = await verifyCustomerMsg91Token('widget-token', {
+      authkey: 'test-authkey',
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success', message: '919999999999' },
+      }),
+      createCustomToken: async () => {
+        throw new Error('admin-failed');
+      },
+    });
+    assert.deepEqual(result, { ok: false, code: 'token' });
+    assert.equal(JSON.stringify(result).includes('admin-failed'), false);
   });
 
   it('posts the documented MSG91 body when using the real client with a mock fetch', async () => {
@@ -91,16 +198,17 @@ describe('verifyCustomerMsg91Token', () => {
       captured = { url, options };
       return {
         status: 200,
-        json: async () => ({ type: 'success' }),
+        json: async () => ({ type: 'success', message: '919999999999' }),
       };
     };
 
     const result = await verifyCustomerMsg91Token('widget-token', {
       authkey: 'test-authkey',
       verifyAccessToken: (args) => verifyAccessToken({ ...args, fetchImpl }),
+      createCustomToken: async () => MOCK_CUSTOM_TOKEN,
     });
 
-    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(result, { ok: true, customToken: MOCK_CUSTOM_TOKEN });
     assert.equal(captured.url, MSG91_VERIFY_ACCESS_TOKEN_URL);
     const sent = JSON.parse(captured.options.body);
     assert.deepEqual(sent, {
@@ -111,18 +219,6 @@ describe('verifyCustomerMsg91Token', () => {
 });
 
 describe('handleCustomerMsg91Session', () => {
-  const deps = {
-    env: {
-      MSG91_AUTHKEY: 'test-authkey',
-      ALLOWED_ORIGINS: localOrigin,
-    },
-    verifyAccessToken: async () => ({
-      kind: 'http',
-      status: 200,
-      body: { type: 'success' },
-    }),
-  };
-
   it('handles CORS preflight for an allowed origin', async () => {
     const req = mockReq({
       method: 'OPTIONS',
@@ -130,7 +226,7 @@ describe('handleCustomerMsg91Session', () => {
       contentType: 'application/json',
     });
     const res = mockRes();
-    await handleCustomerMsg91Session(req, res, deps);
+    await handleCustomerMsg91Session(req, res, successDeps);
     assert.equal(res.statusCode, 204);
     assert.equal(res.headers['Access-Control-Allow-Origin'], localOrigin);
     assert.notEqual(res.headers['Access-Control-Allow-Origin'], '*');
@@ -143,7 +239,7 @@ describe('handleCustomerMsg91Session', () => {
       contentType: 'application/json',
     });
     const res = mockRes();
-    await handleCustomerMsg91Session(req, res, deps);
+    await handleCustomerMsg91Session(req, res, successDeps);
     assert.equal(res.headers['Access-Control-Allow-Origin'], undefined);
   });
 
@@ -154,7 +250,7 @@ describe('handleCustomerMsg91Session', () => {
       contentType: 'application/json',
     });
     const res = mockRes();
-    await handleCustomerMsg91Session(req, res, deps);
+    await handleCustomerMsg91Session(req, res, successDeps);
     assert.equal(res.statusCode, 405);
   });
 
@@ -166,7 +262,7 @@ describe('handleCustomerMsg91Session', () => {
       body: { token: 'abc' },
     });
     const res = mockRes();
-    await handleCustomerMsg91Session(req, res, deps);
+    await handleCustomerMsg91Session(req, res, successDeps);
     assert.equal(res.statusCode, 415);
   });
 
@@ -178,12 +274,12 @@ describe('handleCustomerMsg91Session', () => {
       body: { mobile: '9876543210', mobileVerified: true },
     });
     const res = mockRes();
-    await handleCustomerMsg91Session(req, res, deps);
+    await handleCustomerMsg91Session(req, res, successDeps);
     assert.equal(res.statusCode, 400);
     assert.deepEqual(JSON.parse(res.body), { error: 'Invalid request' });
   });
 
-  it('returns { ok: true } on mocked success and does not leak secrets', async () => {
+  it('returns only customToken on success and does not leak secrets', async () => {
     const req = mockReq({
       method: 'POST',
       origin: localOrigin,
@@ -191,12 +287,57 @@ describe('handleCustomerMsg91Session', () => {
       body: { token: 'widget-token' },
     });
     const res = mockRes();
-    await handleCustomerMsg91Session(req, res, deps);
+    await handleCustomerMsg91Session(req, res, successDeps);
     assert.equal(res.statusCode, 200);
-    assert.deepEqual(JSON.parse(res.body), { ok: true });
-    const serialized = JSON.stringify(res.body);
+    const parsedBody = JSON.parse(res.body);
+    assert.deepEqual(Object.keys(parsedBody), ['customToken']);
+    assert.equal(parsedBody.customToken, MOCK_CUSTOM_TOKEN);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'ok'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'message'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'mobile'), false);
+    const serialized = String(res.body);
     assert.equal(serialized.includes('widget-token'), false);
     assert.equal(serialized.includes('test-authkey'), false);
-    assert.equal(serialized.includes('mobile'), false);
+    assert.equal(serialized.includes('919999999999'), false);
+    assert.equal(serialized.includes('9999999999'), false);
+  });
+
+  it('returns generic 401 when message is missing', async () => {
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success' },
+      }),
+    });
+    assert.equal(res.statusCode, 401);
+    assert.deepEqual(JSON.parse(res.body), { error: 'Verification failed' });
+  });
+
+  it('returns generic 500 when custom-token creation fails', async () => {
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      createCustomToken: async () => {
+        throw new Error('admin-failed');
+      },
+    });
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(JSON.parse(res.body), { error: 'Verification unavailable' });
+    assert.equal(String(res.body).includes('admin-failed'), false);
   });
 });
