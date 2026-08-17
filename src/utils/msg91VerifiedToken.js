@@ -1,18 +1,36 @@
 /**
  * Isolated extraction of the MSG91 widget verifyOtp success payload token.
  *
- * MSG91 documents that success(data) contains the verified token.
- * The exact object property name is NOT confirmed in this repository.
- * Do not guess keys such as "access-token", "message", "token", or "accessToken".
+ * Confirmed client contract (live login capture):
+ *   data is a non-null, non-array object
+ *   data.message is the client verifyOtp JWT/access token (string)
+ *   data.type is status metadata, not the token
+ *
+ * This client `message` is NOT the server verifyAccessToken `message`
+ * (that server field is the verified mobile identifier).
  *
  * Never log the token. Never write it to localStorage or sessionStorage.
- * A raw-string callback is accepted in memory only. Do not use it for
- * Firebase authentication until the payload shape is confirmed.
+ * Never decode the JWT. Never read type, access-token, accessToken, token,
+ * mobile, verifiedMobile, or the browser mobile number as the token.
  */
+
+const TOKEN_UNAVAILABLE = 'MSG91 verified token is not available.';
+
+const extractFromConfirmedObject = (data) => {
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return '';
+  }
+
+  if (typeof data.message !== 'string') {
+    return '';
+  }
+
+  return data.message.trim();
+};
 
 /**
  * @param {unknown} data - Raw MSG91 verifyOtp success callback argument
- * @returns {string} Verified token string (in-memory only)
+ * @returns {string} Verified client token string (in-memory only)
  */
 export const extractMsg91VerifiedToken = (data) => {
   if (typeof data === 'string') {
@@ -20,7 +38,8 @@ export const extractMsg91VerifiedToken = (data) => {
     if (trimmed) return trimmed;
   }
 
-  throw new Error(
-    'MSG91 verified token is not available. The success-response property is pending confirmation.',
-  );
+  const fromObject = extractFromConfirmedObject(data);
+  if (fromObject) return fromObject;
+
+  throw new Error(TOKEN_UNAVAILABLE);
 };

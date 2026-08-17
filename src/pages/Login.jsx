@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { signInWithCustomToken } from 'firebase/auth';
+import { auth } from '../firebaseConfig';
 import {
   initializeCustomerLoginOtp,
   isCustomerLoginCaptchaVerified,
   MSG91_LOGIN_CAPTCHA_RENDER_ID,
   onCustomerLoginCaptchaChange,
-  retryCustomerLoginOtp,
-  sendCustomerLoginOtp,
-  verifyCustomerLoginOtp,
 } from '../services/msg91LoginOtp';
+import {
+  exchangeVerifiedTokenForSession,
+  requestCustomerOtp,
+  resendCustomerOtp,
+  verifyCustomerOtp,
+} from '../services/customerAuth';
 import {
   isValidIndianMobile,
   maskMobile,
@@ -16,12 +21,16 @@ import {
 } from '../services/msg91Otp';
 
 const RESEND_SECONDS = 10;
+const GENERIC_VERIFY_ERROR = 'Unable to verify. Please try again.';
+const GENERIC_SESSION_ERROR = 'Unable to complete login. Please try again.';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [showOtpPanel, setShowOtpPanel] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
+  const [loginSuccessful, setLoginSuccessful] = useState(false);
   const [otpMessage, setOtpMessage] = useState('');
   const [otpError, setOtpError] = useState('');
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -35,7 +44,8 @@ const Login = () => {
   const otpInputRef = useRef(null);
   const mobileInputRef = useRef(null);
   const reqIdRef = useRef('');
-  const verifiedPayloadRef = useRef(null);
+  const verifiedTokenRef = useRef('');
+  const customTokenRef = useRef('');
   const busyRef = useRef(false);
 
   useEffect(() => {
@@ -74,7 +84,8 @@ const Login = () => {
 
   useEffect(() => {
     return () => {
-      verifiedPayloadRef.current = null;
+      verifiedTokenRef.current = '';
+      customTokenRef.current = '';
     };
   }, []);
 
@@ -100,7 +111,9 @@ const Login = () => {
     setOtpError('');
     setResendSeconds(0);
     reqIdRef.current = '';
-    verifiedPayloadRef.current = null;
+    verifiedTokenRef.current = '';
+    customTokenRef.current = '';
+    setLoginSuccessful(false);
   };
 
   const handleMobileChange = (e) => {
@@ -138,14 +151,16 @@ const Login = () => {
         return;
       }
 
-      const result = await sendCustomerLoginOtp(mobile);
+      const result = await requestCustomerOtp(mobile);
       if (result.reqId) reqIdRef.current = String(result.reqId);
 
       setMobileNumber(mobile);
       setShowOtpPanel(true);
       setOtp('');
       setOtpVerified(false);
-      verifiedPayloadRef.current = null;
+      setLoginSuccessful(false);
+      verifiedTokenRef.current = '';
+      customTokenRef.current = '';
       setOtpMessage('OTP sent successfully.');
       setResendSeconds(RESEND_SECONDS);
     } catch (err) {
@@ -173,17 +188,67 @@ const Login = () => {
     setVerifyingOtp(true);
 
     try {
-      const rawSuccess = await verifyCustomerLoginOtp(otp, reqIdRef.current || undefined);
-      verifiedPayloadRef.current = rawSuccess;
+      let token = '';
+      try {
+        const verified = await verifyCustomerOtp(otp, reqIdRef.current || undefined);
+        token = verified?.token || '';
+      } catch {
+        verifiedTokenRef.current = '';
+        customTokenRef.current = '';
+        setOtpVerified(false);
+        setLoginSuccessful(false);
+        setOtpError(GENERIC_VERIFY_ERROR);
+        return;
+      }
+
+      if (typeof token !== 'string' || !token.trim()) {
+        verifiedTokenRef.current = '';
+        customTokenRef.current = '';
+        setOtpVerified(false);
+        setLoginSuccessful(false);
+        setOtpError(GENERIC_VERIFY_ERROR);
+        return;
+      }
+
+      verifiedTokenRef.current = token;
+
+      let customToken = '';
+      try {
+        const exchanged = await exchangeVerifiedTokenForSession(token);
+        customToken = exchanged.customToken;
+      } finally {
+        verifiedTokenRef.current = '';
+      }
+
+      if (typeof customToken !== 'string' || !customToken.trim()) {
+        customTokenRef.current = '';
+        setOtpVerified(false);
+        setLoginSuccessful(false);
+        setOtpError(GENERIC_SESSION_ERROR);
+        return;
+      }
+
+      customTokenRef.current = customToken;
+      try {
+        await signInWithCustomToken(auth, customToken);
+      } finally {
+        customTokenRef.current = '';
+        customToken = '';
+      }
+
       setOtpVerified(true);
+      setLoginSuccessful(true);
       setShowOtpPanel(false);
       setOtp('');
       setOtpError('');
       setResendSeconds(0);
+      navigate('/', { replace: true });
     } catch {
-      verifiedPayloadRef.current = null;
+      verifiedTokenRef.current = '';
+      customTokenRef.current = '';
       setOtpVerified(false);
-      setOtpError('Invalid or expired OTP. Please try again.');
+      setLoginSuccessful(false);
+      setOtpError(GENERIC_SESSION_ERROR);
     } finally {
       setVerifyingOtp(false);
       busyRef.current = false;
@@ -199,7 +264,7 @@ const Login = () => {
     setResendingOtp(true);
 
     try {
-      const result = await retryCustomerLoginOtp(reqIdRef.current || undefined);
+      const result = await resendCustomerOtp(reqIdRef.current || undefined);
       if (result.reqId) reqIdRef.current = String(result.reqId);
       setOtp('');
       setOtpMessage('OTP resent successfully.');
@@ -234,7 +299,13 @@ const Login = () => {
         </div>
 
         <div className="card p-8 space-y-5">
-          {otpVerified && (
+          {loginSuccessful && (
+            <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-4 text-sm text-green-800 space-y-3">
+              <p className="font-semibold">Login successful</p>
+            </div>
+          )}
+
+          {otpVerified && !loginSuccessful && (
             <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-4 text-sm text-green-800 space-y-3">
               <p className="font-semibold">
                 OTP verified successfully. Session setup will be completed in the next step.
