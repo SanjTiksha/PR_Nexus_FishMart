@@ -70,6 +70,9 @@ const main = async () => {
   const unauthorized = testEnv
     .authenticatedContext('user-sales', { email: 'sales@prnexusgroup.com' })
     .firestore();
+  const customerUid = 'phone_919876543210';
+  const otherCustomerUid = 'phone_919999999999';
+  const customer = testEnv.authenticatedContext(customerUid).firestore();
 
   // Public reads
   await check('3. public catalog read', () => assertSucceeds(getDoc(doc(anon, 'fishes', 'f1'))));
@@ -119,6 +122,77 @@ const main = async () => {
         paidVerified: false,
       }),
     ),
+  );
+
+  await check('guest order create with customerUid denied', () =>
+    assertFails(
+      setDoc(doc(anon, 'orders', 'ORDER_GUEST_UID'), {
+        orderId: 'ORDER_GUEST_UID',
+        paymentStatus: 'PENDING_CONFIRMATION',
+        paidVerified: false,
+        customerUid,
+      }),
+    ),
+  );
+
+  await check('customer order create with own customerUid allowed', () =>
+    assertSucceeds(
+      setDoc(doc(customer, 'orders', 'ORDER_CUST_OWN'), {
+        orderId: 'ORDER_CUST_OWN',
+        paymentStatus: 'PENDING_CONFIRMATION',
+        paidVerified: false,
+        customerUid,
+      }),
+    ),
+  );
+
+  await check('customer order create with another customerUid denied', () =>
+    assertFails(
+      setDoc(doc(customer, 'orders', 'ORDER_CUST_OTHER'), {
+        orderId: 'ORDER_CUST_OTHER',
+        paymentStatus: 'PENDING_CONFIRMATION',
+        paidVerified: false,
+        customerUid: otherCustomerUid,
+      }),
+    ),
+  );
+
+  await check('customer order create without customerUid denied', () =>
+    assertFails(
+      setDoc(doc(customer, 'orders', 'ORDER_CUST_NONE'), {
+        orderId: 'ORDER_CUST_NONE',
+        paymentStatus: 'PENDING_CONFIRMATION',
+        paidVerified: false,
+      }),
+    ),
+  );
+
+  await check('admin order create without customerUid allowed', () =>
+    assertSucceeds(
+      setDoc(doc(admin, 'orders', 'ORDER_ADMIN_GUEST'), {
+        orderId: 'ORDER_ADMIN_GUEST',
+        paymentStatus: 'PENDING_CONFIRMATION',
+        paidVerified: false,
+      }),
+    ),
+  );
+
+  await check('admin order create with customerUid denied', () =>
+    assertFails(
+      setDoc(doc(admin, 'orders', 'ORDER_ADMIN_UID'), {
+        orderId: 'ORDER_ADMIN_UID',
+        paymentStatus: 'PENDING_CONFIRMATION',
+        paidVerified: false,
+        customerUid,
+      }),
+    ),
+  );
+
+  await check('authenticated customer cannot read orders', () =>
+    assertFails(getDoc(doc(customer, 'orders', 'ORDER_EXISTING'))),
+  );
+  await check('authenticated customer cannot read own new order', () =>
+    assertFails(getDoc(doc(customer, 'orders', 'ORDER_CUST_OWN'))),
   );
 
   // Customer cannot read/update/delete orders

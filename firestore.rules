@@ -15,6 +15,14 @@ service cloud.firestore {
         ];
     }
 
+    function isCustomerUid(uid) {
+      return uid.matches('^phone_91[6-9][0-9]{9}$');
+    }
+
+    function isCustomerAuth() {
+      return request.auth != null && isCustomerUid(request.auth.uid);
+    }
+
     // ---------- Catalog / storefront (public read) ----------
 
     match /fishes/{docId} {
@@ -78,16 +86,23 @@ service cloud.firestore {
       allow create: if
         request.resource.data.orderId == orderId
         && request.resource.data.paymentStatus == 'PENDING_CONFIRMATION'
-        && request.resource.data.paidVerified == false;
+        && request.resource.data.paidVerified == false
+        && (
+          (
+            !isCustomerAuth()
+            && !('customerUid' in request.resource.data)
+          )
+          || (
+            isCustomerAuth()
+            && request.resource.data.customerUid == request.auth.uid
+          )
+        );
 
       allow read, update, delete: if isAdmin();
     }
 
     // ---------- Customer profiles (Phase 1A.7) ----------
     // Identity document only. Does not grant order access.
-    function isCustomerUid(uid) {
-      return uid.matches('^phone_91[6-9][0-9]{9}$');
-    }
 
     function isValidCustomerProfileCreate(uid) {
       let d = request.resource.data;

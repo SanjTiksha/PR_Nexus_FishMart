@@ -14,9 +14,10 @@ import {
   serverTimestamp,
   increment
 } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { db, auth } from "../firebaseConfig";
 import fishDataFallback from "../data/fishData.json";
 import { normalizeDeliveryChargeRupees } from "../utils/moneyUtils";
+import { applyOrderCustomerOwnership } from "./orderCustomerOwnership.js";
 
 // Helper to deduplicate fish array by id and name (keep first occurrence)
 const deduplicateFish = (fishArray) => {
@@ -1585,15 +1586,19 @@ export const createCustomerOrder = async (order) => {
     throw new Error('Order ID is required to record the order');
   }
 
+  const ownedOrder = applyOrderCustomerOwnership(order, auth.currentUser);
   const payload = stripUndefinedDeep({
-    ...order,
+    ...ownedOrder,
     // Default fulfillment status for new orders (admin may update later)
-    orderStatus: order.orderStatus || 'Processing',
-    createdAt: order.createdAt || order.timestamp || new Date().toISOString(),
+    orderStatus: ownedOrder.orderStatus || 'Processing',
+    createdAt: ownedOrder.createdAt || ownedOrder.timestamp || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
+  if (payload.customerUid == null) {
+    delete payload.customerUid;
+  }
 
-  const orderRef = doc(db, COLLECTIONS.ORDERS, String(order.orderId));
+  const orderRef = doc(db, COLLECTIONS.ORDERS, String(ownedOrder.orderId));
   await setDoc(orderRef, payload, { merge: true });
 
   console.log('✅ Customer order recorded:', order.orderId);
