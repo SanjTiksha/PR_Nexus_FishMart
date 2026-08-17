@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebaseConfig';
 
 const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const location = useLocation();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const authNavLabel = firebaseUser ? 'Account' : 'Login';
+  const authNavActive = location.pathname === '/login';
 
   const navItems = [
     { path: '/', label: 'Fish' },
@@ -52,6 +65,14 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                 </Link>
               );
             })}
+
+            <Link
+              to="/login"
+              className={`fm-nav-link ${authNavActive ? 'fm-nav-link--active' : ''}`}
+            >
+              <span className="fm-nav-link-label">{authNavLabel}</span>
+              <span className="fm-nav-link-underline" aria-hidden="true" />
+            </Link>
 
             <a
               href={`https://wa.me/${shopInfo.whatsapp || shopInfo.phone.replace(/[^0-9]/g, '')}`}
@@ -149,6 +170,14 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                   </Link>
                 );
               })}
+
+              <Link
+                to="/login"
+                className={`fm-mobile-nav-link ${authNavActive ? 'fm-mobile-nav-link--active' : ''}`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {authNavLabel}
+              </Link>
 
               <a
                 href={`https://wa.me/${shopInfo.whatsapp || shopInfo.phone.replace(/[^0-9]/g, '')}`}
