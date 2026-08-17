@@ -2,7 +2,7 @@
  * Phase 1A.7 customer profile helpers.
  *
  * Auth UID is the identity source of truth.
- * Firestore customers/{uid} is create-or-read only.
+ * Firestore customers/{uid} is create-or-read, plus a narrow profile update.
  * Does not use localStorage, sessionStorage, query params, or typed mobile input.
  */
 
@@ -28,7 +28,14 @@ export const FROZEN_CUSTOMER_PROFILE_FIELDS = [
   'schemaVersion',
 ];
 
+export const CUSTOMER_PROFILE_EDITABLE_FIELDS = ['displayName', 'defaultAddressId'];
+export const DISPLAY_NAME_MAX_LENGTH = 80;
+export const DEFAULT_ADDRESS_ID_MAX_LENGTH = 128;
+
 export const PROFILE_SAVE_UNAVAILABLE_MESSAGE =
+  'Unable to save your profile right now. You can keep shopping.';
+
+export const PROFILE_UPDATE_UNAVAILABLE_MESSAGE =
   'Unable to save your profile right now. You can keep shopping.';
 
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -101,19 +108,36 @@ const isAlreadyCreatedError = (error) => {
 };
 
 const resolveProfileDeps = async (deps = {}) => {
-  if (deps.doc && deps.getDoc && deps.setDoc && deps.serverTimestamp && deps.db) {
-    return deps;
+  if (
+    deps.doc &&
+    deps.getDoc &&
+    deps.setDoc &&
+    deps.serverTimestamp &&
+    deps.db
+  ) {
+    return {
+      doc: deps.doc,
+      getDoc: deps.getDoc,
+      setDoc: deps.setDoc,
+      updateDoc: deps.updateDoc,
+      deleteField: deps.deleteField,
+      serverTimestamp: deps.serverTimestamp,
+      db: deps.db,
+    };
   }
 
-  const [{ doc, getDoc, setDoc, serverTimestamp }, { db }] = await Promise.all([
-    import('firebase/firestore'),
-    import('../firebaseConfig.js'),
-  ]);
+  const [{ doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteField }, { db }] =
+    await Promise.all([
+      import('firebase/firestore'),
+      import('../firebaseConfig.js'),
+    ]);
 
   return {
     doc: deps.doc ?? doc,
     getDoc: deps.getDoc ?? getDoc,
     setDoc: deps.setDoc ?? setDoc,
+    updateDoc: deps.updateDoc ?? updateDoc,
+    deleteField: deps.deleteField ?? deleteField,
     serverTimestamp: deps.serverTimestamp ?? serverTimestamp,
     db: deps.db ?? db,
   };
@@ -172,6 +196,130 @@ export const ensureCustomerProfile = async (user, deps = {}) => {
       }
       return { status: 'unavailable' };
     }
+  } catch {
+    return { status: 'unavailable' };
+  }
+};
+
+export const normalizeDisplayName = (value) => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().replace(/\s+/g, ' ');
+  if (!trimmed || trimmed.length > DISPLAY_NAME_MAX_LENGTH) return null;
+  return trimmed;
+};
+
+export const buildCustomerProfileUpdatePayload = (patch, serverTimestampFn, deleteFieldFn) => {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return null;
+  if (typeof serverTimestampFn !== 'function') return null;
+
+  const payload = { updatedAt: serverTimestampFn() };
+  let hasEditable = false;
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'displayName')) {
+    hasEditable = true;
+    if (patch.displayName == null || String(patch.displayName).trim() === '') {
+      if (typeof deleteFieldFn !== 'function') return null;
+      payload.displayName = deleteFieldFn();
+    } else {
+      const displayName = normalizeDisplayName(patch.displayName);
+      if (!displayName) return null;
+      payload.displayName = displayName;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'defaultAddressId')) {
+    hasEditable = true;
+    if (patch.defaultAddressId == null || patch.defaultAddressId === '') {
+      if (typeof deleteFieldFn !== 'function') return null;
+      payload.defaultAddressId = deleteFieldFn();
+    } else if (
+      typeof patch.defaultAddressId === 'string' &&
+      patch.defaultAddressId.length > 0 &&
+      patch.defaultAddressId.length <= DEFAULT_ADDRESS_ID_MAX_LENGTH
+    ) {
+      payload.defaultAddressId = patch.defaultAddressId;
+    } else {
+      return null;
+    }
+  }
+
+  if (!hasEditable) return null;
+  return payload;
+};
+
+export const getCustomerProfile = async (user, deps = {}) => {
+  const identity = getCustomerIdentityFromUser(user);
+  if (!user) {
+    return { status: 'skipped', reason: 'missing-user', profile: null };
+  }
+  if (isAuthorizedAdminUser(user)) {
+    return { status: 'skipped', reason: 'admin', profile: null };
+  }
+  if (!identity) {
+    return { status: 'skipped', reason: 'invalid-uid', profile: null };
+  }
+
+  try {
+    const resolved = await resolveProfileDeps(deps);
+    const ref = resolved.doc(resolved.db, CUSTOMERS_COLLECTION, identity.uid);
+    const profile = await readProfileSnapshot(resolved.getDoc, ref);
+    if (!profile) {
+      return { status: 'missing', profile: null };
+    }
+    return { status: 'ok', profile };
+  } catch {
+    return { status: 'unavailable', profile: null };
+  }
+};
+
+/**
+ * Update only displayName and/or defaultAddressId.
+ * Frozen identity fields are never written.
+ */
+export const updateCustomerProfile = async (user, patch = {}, deps = {}) => {
+  const identity = getCustomerIdentityFromUser(user);
+  if (!user) {
+    return { status: 'skipped', reason: 'missing-user' };
+  }
+  if (isAuthorizedAdminUser(user)) {
+    return { status: 'skipped', reason: 'admin' };
+  }
+  if (!identity) {
+    return { status: 'skipped', reason: 'invalid-uid' };
+  }
+
+  const {
+    uid: _ignoredUid,
+    mobile10: _ignoredMobile,
+    createdAt: _ignoredCreatedAt,
+    schemaVersion: _ignoredSchema,
+    updatedAt: _ignoredUpdatedAt,
+    ...untrusted
+  } = patch && typeof patch === 'object' ? patch : {};
+
+  const safePatch = {};
+  if (Object.prototype.hasOwnProperty.call(untrusted, 'displayName')) {
+    safePatch.displayName = untrusted.displayName;
+  }
+  if (Object.prototype.hasOwnProperty.call(untrusted, 'defaultAddressId')) {
+    safePatch.defaultAddressId = untrusted.defaultAddressId;
+  }
+
+  try {
+    const resolved = await resolveProfileDeps(deps);
+    const payload = buildCustomerProfileUpdatePayload(
+      safePatch,
+      resolved.serverTimestamp,
+      resolved.deleteField,
+    );
+    if (!payload || typeof resolved.updateDoc !== 'function') {
+      return { status: 'unavailable' };
+    }
+
+    const ref = resolved.doc(resolved.db, CUSTOMERS_COLLECTION, identity.uid);
+    await resolved.updateDoc(ref, payload);
+    const profile = await readProfileSnapshot(resolved.getDoc, ref);
+    return { status: 'ok', profile };
   } catch {
     return { status: 'unavailable' };
   }

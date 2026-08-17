@@ -41,6 +41,7 @@ const Admin = lazy(() => import('./pages/Admin'));
 const Login = lazy(() => import('./pages/Login'));
 const Account = lazy(() => import('./pages/Account'));
 const CustomerOrders = lazy(() => import('./pages/CustomerOrders'));
+const CustomerAddresses = lazy(() => import('./pages/CustomerAddresses'));
 const CheckoutConfirmation = lazy(() => import('./components/CheckoutConfirmation'));
 const QRModal = lazy(() => import('./components/QRModal'));
 const TransactionSuccess = lazy(() => import('./components/TransactionSuccess'));
@@ -777,6 +778,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/account" element={<Account />} />
             <Route path="/account/orders" element={<CustomerOrders />} />
+            <Route path="/account/addresses" element={<CustomerAddresses />} />
             <Route path="/admin" element={<Admin fishData={fishData} refreshFishData={refreshFishData} />} />
             </Routes>
           </Suspense>

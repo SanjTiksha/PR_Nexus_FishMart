@@ -127,15 +127,103 @@ service cloud.firestore {
         && d.updatedAt is timestamp;
     }
 
+    function isValidCustomerProfileUpdate(uid) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return request.auth != null
+        && request.auth.uid == uid
+        && isCustomerUid(uid)
+        && after.uid == before.uid
+        && after.mobile10 == before.mobile10
+        && after.createdAt == before.createdAt
+        && after.schemaVersion == before.schemaVersion
+        && after.keys().hasOnly([
+          'uid',
+          'mobile10',
+          'createdAt',
+          'updatedAt',
+          'schemaVersion',
+          'displayName',
+          'defaultAddressId'
+        ])
+        && after.diff(before).affectedKeys()
+          .hasOnly(['displayName', 'defaultAddressId', 'updatedAt'])
+        && after.updatedAt is timestamp
+        && (!('displayName' in after)
+          || (after.displayName is string
+            && after.displayName.size() > 0
+            && after.displayName.size() <= 80))
+        && (!('defaultAddressId' in after)
+          || (after.defaultAddressId is string
+            && after.defaultAddressId.size() > 0
+            && after.defaultAddressId.size() <= 128));
+    }
+
+    function isValidCustomerAddressWrite(uid, addressId, isCreate) {
+      let d = request.resource.data;
+      return request.auth != null
+        && request.auth.uid == uid
+        && isCustomerUid(uid)
+        && d.addressId == addressId
+        && d.keys().hasOnly([
+          'addressId',
+          'label',
+          'fullName',
+          'mobile10',
+          'address',
+          'landmark',
+          'location',
+          'createdAt',
+          'updatedAt'
+        ])
+        && d.label in ['Home', 'Office', 'Other']
+        && d.fullName is string
+        && d.fullName.size() > 0
+        && d.fullName.size() <= 80
+        && d.mobile10 is string
+        && d.mobile10.matches('^[6-9][0-9]{9}$')
+        && d.address is string
+        && d.address.size() > 0
+        && d.address.size() <= 500
+        && (!('landmark' in d)
+          || (d.landmark is string && d.landmark.size() > 0 && d.landmark.size() <= 120))
+        && d.location.keys().hasOnly(['lat', 'lng', 'confirmed'])
+        && d.location.lat is number
+        && d.location.lng is number
+        && d.location.lat >= -90
+        && d.location.lat <= 90
+        && d.location.lng >= -180
+        && d.location.lng <= 180
+        && d.location.confirmed == true
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp
+        && (
+          isCreate
+          || d.createdAt == resource.data.createdAt
+        );
+    }
+
     match /customers/{uid} {
       allow read: if isAdmin()
         || (request.auth != null && request.auth.uid == uid);
 
       allow create: if isValidCustomerProfileCreate(uid);
 
-      allow update: if false;
+      allow update: if isValidCustomerProfileUpdate(uid);
 
       allow delete: if isAdmin();
+
+      match /addresses/{addressId} {
+        allow read: if isAdmin()
+          || (request.auth != null && request.auth.uid == uid);
+
+        allow create: if isValidCustomerAddressWrite(uid, addressId, true);
+
+        allow update: if isValidCustomerAddressWrite(uid, addressId, false);
+
+        allow delete: if isAdmin()
+          || (request.auth != null && request.auth.uid == uid);
+      }
     }
 
     // ---------- Default deny ----------

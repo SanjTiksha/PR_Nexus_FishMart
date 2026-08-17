@@ -47,7 +47,7 @@ const setMapGesturesEnabled = (map, enabled) => {
   }
 };
 
-const DeliveryLocationPicker = ({ onChange }) => {
+const DeliveryLocationPicker = ({ onChange, initialLocation = null }) => {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markerRef = useRef(null);
@@ -176,7 +176,17 @@ const DeliveryLocationPicker = ({ onChange }) => {
     const resizeTimers = [100, 350, 700].map((ms) =>
       setTimeout(() => map.invalidateSize(), ms)
     );
-    detectLocation();
+    const startLat = Number(initialLocation?.lat);
+    const startLng = Number(initialLocation?.lng);
+    if (Number.isFinite(startLat) && Number.isFinite(startLng)) {
+      const isConfirmed = initialLocation?.confirmed === true;
+      setMarker(startLat, startLng);
+      emitChange(startLat, startLng, null, isConfirmed);
+      setConfirmed(isConfirmed);
+      setStatus('ready');
+    } else {
+      detectLocation();
+    }
 
     return () => {
       resizeTimers.forEach(clearTimeout);
@@ -184,7 +194,7 @@ const DeliveryLocationPicker = ({ onChange }) => {
       mapInstanceRef.current = null;
       markerRef.current = null;
     };
-  }, [detectLocation, emitChange, setMarker]);
+  }, [detectLocation, emitChange, initialLocation, setMarker]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;

@@ -6,14 +6,16 @@ import EnhancedLoadingSpinner from '../components/EnhancedLoadingSpinner';
 import { getAccountRedirectPath } from '../services/customerSession';
 import {
   PROFILE_SAVE_UNAVAILABLE_MESSAGE,
+  PROFILE_UPDATE_UNAVAILABLE_MESSAGE,
   ensureCustomerProfile,
   getCustomerIdentityFromUser,
+  getCustomerProfile,
+  updateCustomerProfile,
 } from '../services/customerProfile';
 
 const COMING_SOON_NAV = [
   { id: 'reorder', emoji: '🔄', label: 'Buy Again', hint: 'Quickly reorder your favourites' },
   { id: 'favourites', emoji: '❤️', label: 'Favourites', hint: 'Your saved fish & seafood' },
-  { id: 'addresses', emoji: '📍', label: 'Addresses', hint: 'Manage delivery addresses' },
   { id: 'rewards', emoji: '🎁', label: 'Rewards', hint: 'Offers and loyalty, coming later' },
 ];
 
@@ -41,6 +43,9 @@ const Account = () => {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [profileSaveError, setProfileSaveError] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileUpdateMessage, setProfileUpdateMessage] = useState('');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -58,10 +63,15 @@ const Account = () => {
     setProfileSaveError('');
 
     ensureCustomerProfile(firebaseUser)
-      .then((result) => {
+      .then(async (result) => {
         if (cancelled) return;
         if (result.status === 'unavailable') {
           setProfileSaveError(PROFILE_SAVE_UNAVAILABLE_MESSAGE);
+        }
+        const loaded = await getCustomerProfile(firebaseUser);
+        if (cancelled) return;
+        if (loaded.profile && typeof loaded.profile.displayName === 'string') {
+          setDisplayName(loaded.profile.displayName);
         }
       })
       .catch(() => {
@@ -74,6 +84,32 @@ const Account = () => {
       cancelled = true;
     };
   }, [authReady, firebaseUser]);
+
+  const handleSaveDisplayName = async (event) => {
+    event.preventDefault();
+    if (profileSaving) return;
+    setProfileUpdateMessage('');
+    setProfileSaving(true);
+    try {
+      const result = await updateCustomerProfile(firebaseUser, {
+        displayName: displayName.trim() || null,
+      });
+      if (result.status === 'ok') {
+        setDisplayName(
+          result.profile && typeof result.profile.displayName === 'string'
+            ? result.profile.displayName
+            : '',
+        );
+        setProfileUpdateMessage('Profile saved.');
+      } else {
+        setProfileUpdateMessage(PROFILE_UPDATE_UNAVAILABLE_MESSAGE);
+      }
+    } catch {
+      setProfileUpdateMessage(PROFILE_UPDATE_UNAVAILABLE_MESSAGE);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -133,6 +169,15 @@ const Account = () => {
                     My Orders
                   </Link>
                 </li>
+                <li>
+                  <Link
+                    to="/account/addresses"
+                    className="flex items-center gap-3 px-3 py-3 min-h-[48px] rounded-xl text-gray-800 font-medium hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                  >
+                    <span aria-hidden="true">📍</span>
+                    Addresses
+                  </Link>
+                </li>
                 {COMING_SOON_NAV.map((item) => (
                   <ComingSoonRow key={item.id} item={item} />
                 ))}
@@ -187,6 +232,38 @@ const Account = () => {
               </Link>
             </section>
 
+            <section className="card p-5 sm:p-6">
+              <h2 className="text-lg font-bold text-gray-900">Your Profile</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Optional. You can keep shopping without adding a name.
+              </p>
+              <form className="mt-4 space-y-3" onSubmit={handleSaveDisplayName}>
+                <label className="block">
+                  <span className="text-sm font-semibold text-gray-800">Name</span>
+                  <input
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    maxLength={80}
+                    autoComplete="name"
+                    placeholder="Your name"
+                    className="mt-1 w-full min-h-[48px] rounded-2xl border border-gray-200 px-4 text-base text-gray-900"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={profileSaving}
+                  className="flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-[#087EA4] px-6 text-base font-bold text-white disabled:opacity-60 lg:w-auto lg:min-w-[160px]"
+                >
+                  {profileSaving ? 'Saving…' : 'Save'}
+                </button>
+                {profileUpdateMessage ? (
+                  <p className="text-sm text-gray-600" role="status">
+                    {profileUpdateMessage}
+                  </p>
+                ) : null}
+              </form>
+            </section>
+
             <section className="lg:hidden" aria-labelledby="account-features-heading">
               <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-3 sm:p-4">
                 <h2
@@ -204,6 +281,20 @@ const Account = () => {
                       <span className="flex min-w-0 items-center gap-3">
                         <span aria-hidden="true">📦</span>
                         <span className="truncate">My Orders</span>
+                      </span>
+                      <span className="shrink-0 text-gray-400" aria-hidden="true">
+                        ›
+                      </span>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to="/account/addresses"
+                      className="flex items-center justify-between gap-3 min-h-[48px] px-3 py-2 rounded-xl font-medium text-gray-800 hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span aria-hidden="true">📍</span>
+                        <span className="truncate">Addresses</span>
                       </span>
                       <span className="shrink-0 text-gray-400" aria-hidden="true">
                         ›
@@ -234,6 +325,16 @@ const Account = () => {
                   </p>
                   <h3 className="mt-3 text-lg font-bold text-gray-900">My Orders</h3>
                   <p className="mt-1 text-sm text-gray-600">View your FishMart orders</p>
+                </Link>
+                <Link
+                  to="/account/addresses"
+                  className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 sm:p-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                >
+                  <p className="text-2xl" aria-hidden="true">
+                    📍
+                  </p>
+                  <h3 className="mt-3 text-lg font-bold text-gray-900">Addresses</h3>
+                  <p className="mt-1 text-sm text-gray-600">Manage delivery addresses</p>
                 </Link>
                 {COMING_SOON_NAV.filter((item) => item.id !== 'rewards').map((item) => (
                   <div

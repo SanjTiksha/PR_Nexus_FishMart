@@ -18,7 +18,6 @@ import { calculateLineTotal, normalizeQuantity } from '../utils/quantityUtils';
 const COMING_SOON_NAV = [
   { id: 'reorder', emoji: '🔄', label: 'Buy Again' },
   { id: 'favourites', emoji: '❤️', label: 'Favourites' },
-  { id: 'addresses', emoji: '📍', label: 'Addresses' },
   { id: 'rewards', emoji: '🎁', label: 'Rewards' },
 ];
 
@@ -239,6 +238,15 @@ const CustomerOrders = () => {
                     <span aria-hidden="true">📦</span>
                     My Orders
                   </span>
+                </li>
+                <li>
+                  <Link
+                    to="/account/addresses"
+                    className="flex items-center gap-3 px-3 py-3 min-h-[48px] rounded-xl text-gray-800 font-medium hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
+                  >
+                    <span aria-hidden="true">📍</span>
+                    Addresses
+                  </Link>
                 </li>
                 {COMING_SOON_NAV.map((item) => (
                   <ComingSoonRow key={item.id} item={item} />

@@ -9,11 +9,14 @@ import {
   FROZEN_CUSTOMER_PROFILE_FIELDS,
   PROFILE_SAVE_UNAVAILABLE_MESSAGE,
   buildCustomerProfileCreatePayload,
+  buildCustomerProfileUpdatePayload,
   ensureCustomerProfile,
   formatMaskedCustomerMobile,
   getCustomerIdentityFromUser,
+  getCustomerProfile,
   isValidCustomerUid,
   parseCustomerIdentityFromUid,
+  updateCustomerProfile,
   wouldOverwriteFrozenFields,
 } from './customerProfile.js';
 
@@ -52,6 +55,25 @@ const createMemoryDeps = (seed = new Map()) => {
         throw error;
       }
       store.set(ref.id, data);
+    },
+    deleteField: () => ({ __deleteField: true }),
+    updateDoc: async (ref, data) => {
+      writes.push({ id: ref.id, data, type: 'update' });
+      const existing = store.get(ref.id);
+      if (!existing) {
+        const error = new Error('not-found');
+        error.code = 'not-found';
+        throw error;
+      }
+      const next = { ...existing };
+      for (const [key, value] of Object.entries(data || {})) {
+        if (value && value.__deleteField) {
+          delete next[key];
+        } else {
+          next[key] = value;
+        }
+      }
+      store.set(ref.id, next);
     },
   };
 };
@@ -270,5 +292,137 @@ describe('no token or web storage', () => {
     assert.equal(source.includes('AuthKey'), false);
     assert.equal(source.includes('searchParams'), false);
     assert.equal(source.includes('window.location'), false);
+  });
+});
+
+describe('getCustomerProfile', () => {
+  it('reads an existing profile without writing', async () => {
+    const existing = {
+      uid: VALID_UID,
+      mobile10: VALID_MOBILE10,
+      createdAt: 'CREATED',
+      updatedAt: 'UPDATED',
+      schemaVersion: 1,
+      displayName: 'Ajay',
+    };
+    const deps = createMemoryDeps(new Map([[VALID_UID, existing]]));
+    const result = await getCustomerProfile(VALID_USER, deps);
+    assert.equal(result.status, 'ok');
+    assert.equal(result.profile.displayName, 'Ajay');
+    assert.equal(result.profile.uid, VALID_UID);
+    assert.equal(deps.writes.length, 0);
+  });
+
+  it('does not use a caller-supplied uid', async () => {
+    const deps = createMemoryDeps(new Map([[VALID_UID, { uid: VALID_UID, mobile10: VALID_MOBILE10 }]]));
+    const result = await getCustomerProfile(
+      { uid: VALID_UID, requestedUid: 'phone_919999999999' },
+      deps,
+    );
+    assert.equal(result.status, 'ok');
+    assert.equal(result.profile.uid, VALID_UID);
+  });
+});
+
+describe('updateCustomerProfile', () => {
+  const seedProfile = {
+    uid: VALID_UID,
+    mobile10: VALID_MOBILE10,
+    createdAt: 'CREATED',
+    updatedAt: 'UPDATED',
+    schemaVersion: 1,
+  };
+
+  it('updates displayName only', async () => {
+    const deps = createMemoryDeps(new Map([[VALID_UID, { ...seedProfile }]]));
+    const result = await updateCustomerProfile(VALID_USER, { displayName: '  Rajesh  ' }, deps);
+    assert.equal(result.status, 'ok');
+    assert.equal(result.profile.displayName, 'Rajesh');
+    assert.equal(result.profile.uid, VALID_UID);
+    assert.equal(result.profile.mobile10, VALID_MOBILE10);
+    assert.equal(result.profile.createdAt, 'CREATED');
+    assert.equal(result.profile.schemaVersion, 1);
+    assert.equal(result.profile.updatedAt, 'SERVER_TIMESTAMP');
+    assert.deepEqual(Object.keys(deps.writes[0].data).sort(), ['displayName', 'updatedAt']);
+  });
+
+  it('updates defaultAddressId only', async () => {
+    const deps = createMemoryDeps(new Map([[VALID_UID, { ...seedProfile }]]));
+    const result = await updateCustomerProfile(
+      VALID_USER,
+      { defaultAddressId: 'addr_home_1' },
+      deps,
+    );
+    assert.equal(result.status, 'ok');
+    assert.equal(result.profile.defaultAddressId, 'addr_home_1');
+    assert.deepEqual(Object.keys(deps.writes[0].data).sort(), ['defaultAddressId', 'updatedAt']);
+  });
+
+  it('strips frozen identity fields from an update patch', async () => {
+    const deps = createMemoryDeps(new Map([[VALID_UID, { ...seedProfile }]]));
+    const result = await updateCustomerProfile(
+      VALID_USER,
+      {
+        displayName: 'Safe',
+        uid: 'phone_919999999999',
+        mobile10: '9999999999',
+        createdAt: 'HACKED',
+        schemaVersion: 99,
+        email: 'attacker@example.com',
+      },
+      deps,
+    );
+    assert.equal(result.status, 'ok');
+    assert.equal(result.profile.uid, VALID_UID);
+    assert.equal(result.profile.mobile10, VALID_MOBILE10);
+    assert.equal(result.profile.createdAt, 'CREATED');
+    assert.equal(result.profile.schemaVersion, 1);
+    assert.equal(Object.hasOwn(result.profile, 'email'), false);
+    assert.equal(Object.hasOwn(deps.writes[0].data, 'uid'), false);
+    assert.equal(Object.hasOwn(deps.writes[0].data, 'mobile10'), false);
+    assert.equal(Object.hasOwn(deps.writes[0].data, 'createdAt'), false);
+    assert.equal(Object.hasOwn(deps.writes[0].data, 'schemaVersion'), false);
+    assert.equal(Object.hasOwn(deps.writes[0].data, 'email'), false);
+  });
+
+  it('rejects unknown-only patches without writing', async () => {
+    const deps = createMemoryDeps(new Map([[VALID_UID, { ...seedProfile }]]));
+    const result = await updateCustomerProfile(VALID_USER, { email: 'x@y.z' }, deps);
+    assert.equal(result.status, 'unavailable');
+    assert.equal(deps.writes.length, 0);
+  });
+
+  it('skips unauthenticated updates', async () => {
+    const deps = createMemoryDeps(new Map([[VALID_UID, { ...seedProfile }]]));
+    const result = await updateCustomerProfile(null, { displayName: 'Nope' }, deps);
+    assert.deepEqual(result, { status: 'skipped', reason: 'missing-user' });
+    assert.equal(deps.writes.length, 0);
+  });
+
+  it('does not update another customer from caller input', async () => {
+    const otherUid = 'phone_919999999999';
+    const deps = createMemoryDeps(
+      new Map([
+        [VALID_UID, { ...seedProfile }],
+        [otherUid, { ...seedProfile, uid: otherUid, mobile10: '9999999999' }],
+      ]),
+    );
+    const result = await updateCustomerProfile(
+      VALID_USER,
+      { uid: otherUid, displayName: 'Intruder' },
+      deps,
+    );
+    assert.equal(result.status, 'ok');
+    assert.equal(deps.store.get(VALID_UID).displayName, 'Intruder');
+    assert.equal(Object.hasOwn(deps.store.get(otherUid), 'displayName'), false);
+  });
+
+  it('builds an allowlisted update payload', () => {
+    const payload = buildCustomerProfileUpdatePayload(
+      { displayName: 'Ajay' },
+      () => 'SERVER_TIMESTAMP',
+      () => ({ __deleteField: true }),
+    );
+    assert.deepEqual(payload, { displayName: 'Ajay', updatedAt: 'SERVER_TIMESTAMP' });
   });
 });

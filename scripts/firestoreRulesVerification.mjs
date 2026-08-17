@@ -22,6 +22,8 @@ import {
   query,
   where,
   limit,
+  serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -344,6 +346,231 @@ const main = async () => {
 
   await check('_test_connection denied to public', () =>
     assertFails(getDocs(collection(anon, '_test_connection'))),
+  );
+
+  const profileCreatePayload = {
+    uid: customerUid,
+    mobile10: '9876543210',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    schemaVersion: 1,
+  };
+
+  await check('customer can create own profile', () =>
+    assertSucceeds(setDoc(doc(customer, 'customers', customerUid), profileCreatePayload)),
+  );
+
+  await check('customer profile create rejects extra fields', () =>
+    assertFails(
+      setDoc(doc(customer, 'customers', otherCustomerUid), {
+        uid: otherCustomerUid,
+        mobile10: '9999999999',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        schemaVersion: 1,
+        displayName: 'Too Early',
+      }),
+    ),
+  );
+
+  await check('customer can read own profile', () =>
+    assertSucceeds(getDoc(doc(customer, 'customers', customerUid))),
+  );
+
+  await check('customer can update displayName', () =>
+    assertSucceeds(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        displayName: 'Ajay',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('customer can update defaultAddressId', () =>
+    assertSucceeds(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        defaultAddressId: 'addr_home_1',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('customer cannot change uid', () =>
+    assertFails(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        uid: otherCustomerUid,
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('customer cannot change mobile10', () =>
+    assertFails(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        mobile10: '9999999999',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('customer cannot change createdAt', () =>
+    assertFails(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        createdAt: Timestamp.now(),
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('customer cannot change schemaVersion', () =>
+    assertFails(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        schemaVersion: 2,
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('unknown profile fields rejected', () =>
+    assertFails(
+      updateDoc(doc(customer, 'customers', customerUid), {
+        email: 'attacker@example.com',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('unauthenticated profile update rejected', () =>
+    assertFails(
+      updateDoc(doc(anon, 'customers', customerUid), {
+        displayName: 'Guest',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('other customer cannot update profile', () =>
+    assertFails(
+      updateDoc(doc(otherCustomer, 'customers', customerUid), {
+        displayName: 'Intruder',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  const addressPath = (db, addressId) =>
+    doc(db, 'customers', customerUid, 'addresses', addressId);
+
+  const validAddress = (addressId) => ({
+    addressId,
+    label: 'Home',
+    fullName: 'Ajay Kumar',
+    mobile10: '9123456789',
+    address: '12 FC Road, Pune',
+    location: { lat: 18.52, lng: 73.85, confirmed: true },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await check('customer creates own address', () =>
+    assertSucceeds(setDoc(addressPath(customer, 'addr_ok'), validAddress('addr_ok'))),
+  );
+
+  await check('customer reads own addresses', () =>
+    assertSucceeds(getDocs(collection(customer, 'customers', customerUid, 'addresses'))),
+  );
+
+  await check('customer updates own address', () =>
+    assertSucceeds(
+      updateDoc(addressPath(customer, 'addr_ok'), {
+        fullName: 'Office Reception',
+        label: 'Office',
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
+
+  await check('customer creates a second address', () =>
+    assertSucceeds(
+      setDoc(addressPath(customer, 'addr_two'), {
+        ...validAddress('addr_two'),
+        label: 'Other',
+        fullName: 'Family Home',
+      }),
+    ),
+  );
+
+  await check('customer cannot access another customer addresses', () =>
+    assertFails(getDocs(collection(customer, 'customers', otherCustomerUid, 'addresses'))),
+  );
+
+  await check('invalid address mobile rejected', () =>
+    assertFails(
+      setDoc(addressPath(customer, 'addr_bad_mobile'), {
+        ...validAddress('addr_bad_mobile'),
+        mobile10: '1234567890',
+      }),
+    ),
+  );
+
+  await check('missing address name rejected', () =>
+    assertFails(
+      setDoc(addressPath(customer, 'addr_bad_name'), {
+        ...validAddress('addr_bad_name'),
+        fullName: '',
+      }),
+    ),
+  );
+
+  await check('missing address text rejected', () =>
+    assertFails(
+      setDoc(addressPath(customer, 'addr_bad_text'), {
+        ...validAddress('addr_bad_text'),
+        address: '',
+      }),
+    ),
+  );
+
+  await check('unconfirmed location rejected', () =>
+    assertFails(
+      setDoc(addressPath(customer, 'addr_unconfirmed'), {
+        ...validAddress('addr_unconfirmed'),
+        location: { lat: 18.52, lng: 73.85, confirmed: false },
+      }),
+    ),
+  );
+
+  await check('invalid address label rejected', () =>
+    assertFails(
+      setDoc(addressPath(customer, 'addr_bad_label'), {
+        ...validAddress('addr_bad_label'),
+        label: 'Warehouse',
+      }),
+    ),
+  );
+
+  await check('addressId must match document path', () =>
+    assertFails(
+      setDoc(addressPath(customer, 'addr_mismatch'), {
+        ...validAddress('other-id'),
+      }),
+    ),
+  );
+
+  await check('unauthenticated address access rejected', () =>
+    assertFails(getDocs(collection(anon, 'customers', customerUid, 'addresses'))),
+  );
+
+  await check('customer deletes own address', () =>
+    assertSucceeds(deleteDoc(addressPath(customer, 'addr_two'))),
+  );
+
+  await check('admin can read customer profile', () =>
+    assertSucceeds(getDoc(doc(admin, 'customers', customerUid))),
+  );
+
+  await check('admin can read customer address', () =>
+    assertSucceeds(getDoc(addressPath(admin, 'addr_ok'))),
   );
 
   await testEnv.cleanup();
