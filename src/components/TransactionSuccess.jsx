@@ -79,11 +79,11 @@ const TransactionSuccess = ({
     try {
       const result = await onCreateAccount();
       if (result?.status === 'linked') {
-        setConversionStep('address');
+        setConversionStep('created');
         return;
       }
       if (result?.status === 'unlinked') {
-        setConversionStep('done');
+        setConversionStep('created');
         setConversionMessage(CONVERSION_ORDER_UNLINKED_MESSAGE);
         return;
       }
@@ -112,7 +112,7 @@ const TransactionSuccess = ({
     if (result.status === 'busy') return;
     try {
       if (result.status === 'ok') {
-        setConversionStep('done');
+        setConversionStep('complete');
         setConversionMessage('');
         return;
       }
@@ -123,7 +123,7 @@ const TransactionSuccess = ({
   };
 
   const handleNotNowClick = () => {
-    setConversionStep('done');
+    setConversionStep('complete');
     setConversionMessage('');
   };
 
@@ -148,8 +148,8 @@ const TransactionSuccess = ({
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full flex items-center justify-center shrink-0">
               <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
             </div>
-            <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
+            <div className="min-w-0 pr-2">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 leading-tight">
                 Order Submitted Successfully
               </h2>
               <p className="text-xs sm:text-sm text-gray-600">
@@ -159,7 +159,7 @@ const TransactionSuccess = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
+            className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-800 focus-visible:ring-offset-2"
             type="button"
             aria-label="Close"
           >
@@ -167,26 +167,26 @@ const TransactionSuccess = ({
           </button>
         </div>
 
-        {/* Content — one success title in header only; WhatsApp CTA early on mobile */}
-        <div className="p-3 sm:p-5 space-y-2 sm:space-y-4 max-h-[78vh] overflow-y-auto">
+        {/* Content — conversion offer sits above WhatsApp so it is visible without scrolling */}
+        <div className="p-3 sm:p-5 space-y-2 sm:space-y-4 max-h-[78vh] overflow-y-auto min-w-0">
           {/* 1. Status chips (no duplicate success heading) */}
           <div className="space-y-1.5 sm:space-y-2">
-            <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto text-left">
-              <div className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+            <div className="grid grid-cols-2 gap-2 max-w-lg mx-auto text-left min-w-0">
+              <div className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 min-w-0">
                 <span className="text-xs sm:text-sm font-medium text-green-900">Order</span>
-                <span className="text-xs sm:text-sm font-semibold text-green-700 whitespace-nowrap">Recorded ✓</span>
+                <span className="text-xs sm:text-sm font-semibold text-green-700">Recorded ✓</span>
               </div>
               {isPendingConfirmation ? (
-                <div className="rounded-xl border border-orange-200 bg-orange-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                <div className="rounded-xl border border-orange-200 bg-orange-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 min-w-0">
                   <span className="text-xs sm:text-sm font-medium text-orange-900">Payment</span>
                   <span className="text-xs sm:text-sm font-semibold text-orange-700 leading-tight">
                     Pending Verification 🟠
                   </span>
                 </div>
               ) : (
-                <div className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2">
+                <div className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-2 min-w-0">
                   <span className="text-xs sm:text-sm font-medium text-green-900">Payment</span>
-                  <span className="text-xs sm:text-sm font-semibold text-green-700 whitespace-nowrap">
+                  <span className="text-xs sm:text-sm font-semibold text-green-700">
                     {paymentStatusLabel} ✓
                   </span>
                 </div>
@@ -198,14 +198,121 @@ const TransactionSuccess = ({
             </p>
           </div>
 
-          {/* 2. WhatsApp CTA — immediately below status chips; single optional CTA */}
-          <div className="rounded-xl sm:rounded-2xl border border-[#25D366]/70 bg-[#E8F8EF] px-3 py-2.5 sm:p-4 space-y-1.5 sm:space-y-2 shadow-sm">
+          {offerConversion && conversionStep === 'offer' && (
+            <section
+              aria-labelledby="conversion-account-heading"
+              className="rounded-xl sm:rounded-2xl border-2 border-cyan-600 bg-cyan-50 px-3 py-3 sm:p-4 space-y-2.5 min-w-0"
+            >
+              <div className="min-w-0 space-y-1">
+                <h4
+                  id="conversion-account-heading"
+                  className="text-base sm:text-lg font-bold text-slate-900 leading-tight"
+                >
+                  Save your details for next time
+                </h4>
+                <p id="conversion-account-copy" className="text-xs sm:text-sm text-gray-700 leading-snug">
+                  Your order is already placed. Create a FishMart account to save this address and
+                  view your orders next time.
+                </p>
+                <p
+                  id="conversion-account-reassurance"
+                  className="text-xs sm:text-sm font-semibold text-cyan-900 leading-snug"
+                >
+                  ✓ No OTP required — your mobile is already verified
+                </p>
+              </div>
+              {conversionMessage ? (
+                <p className="text-xs sm:text-sm text-amber-800" role="status">
+                  {conversionMessage}
+                </p>
+              ) : null}
+              <div className="flex flex-col gap-2 min-w-0">
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleCreateAccountClick}
+                  aria-describedby="conversion-account-copy conversion-account-reassurance"
+                  className="w-full min-h-[48px] py-3 px-4 bg-cyan-700 hover:bg-cyan-800 active:bg-cyan-900 disabled:opacity-60 text-white rounded-xl font-semibold text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-800 focus-visible:ring-offset-2"
+                >
+                  {conversionBusy ? 'Creating account...' : 'Create Account'}
+                </button>
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleContinueAsGuestClick}
+                  className="w-full min-h-[48px] py-3 px-4 border border-gray-400 bg-white text-gray-800 rounded-xl font-medium text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-800 focus-visible:ring-offset-2 disabled:opacity-60"
+                >
+                  Continue as Guest
+                </button>
+              </div>
+            </section>
+          )}
+
+          {offerConversion && conversionStep === 'created' && (
+            <section
+              aria-labelledby="conversion-created-heading"
+              className="rounded-xl sm:rounded-2xl border-2 border-cyan-600 bg-cyan-50 px-3 py-3 sm:p-4 space-y-2.5 min-w-0"
+            >
+              <div className="min-w-0 space-y-1">
+                <h4
+                  id="conversion-created-heading"
+                  className="text-base sm:text-lg font-bold text-slate-900 leading-tight"
+                >
+                  🎉 Account created successfully!
+                </h4>
+                <p className="text-xs sm:text-sm text-gray-700 leading-snug">
+                  You're all set. Your first order is now linked to your account, so you'll be able
+                  to see it in My Orders.
+                </p>
+              </div>
+              {conversionMessage ? (
+                <p className="text-xs sm:text-sm text-amber-800" role="status">
+                  {conversionMessage}
+                </p>
+              ) : null}
+              <div className="min-w-0 space-y-1 pt-1">
+                <h5 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
+                  Save this delivery address?
+                </h5>
+                <p className="text-xs sm:text-sm text-gray-700 leading-snug">
+                  Save it for faster checkout next time.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 min-w-0">
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleSaveAddressClick}
+                  className="w-full min-h-[48px] py-3 px-4 bg-cyan-700 hover:bg-cyan-800 active:bg-cyan-900 disabled:opacity-60 text-white rounded-xl font-semibold text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-800 focus-visible:ring-offset-2"
+                >
+                  {conversionBusy ? 'Saving...' : 'Save Address'}
+                </button>
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleNotNowClick}
+                  className="w-full min-h-[48px] py-3 px-4 border border-gray-400 bg-white text-gray-800 rounded-xl font-medium text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-800 focus-visible:ring-offset-2 disabled:opacity-60"
+                >
+                  Not Now
+                </button>
+              </div>
+            </section>
+          )}
+
+          {conversionMessage && conversionStep === 'done' ? (
+            <p className="text-xs sm:text-sm text-amber-800" role="status">
+              {conversionMessage}
+            </p>
+          ) : null}
+
+          {/* WhatsApp remains available, below the conversion offer */}
+          <div className="rounded-xl sm:rounded-2xl border border-[#25D366]/70 bg-[#E8F8EF] px-3 py-2.5 sm:p-4 space-y-1.5 sm:space-y-2 min-w-0">
             <div className="min-w-0">
               <h4 className="text-[15px] sm:text-base font-bold text-slate-900 leading-tight">
                 📲 Send Order Details on WhatsApp
               </h4>
               <p className="mt-0.5 text-[11px] sm:text-xs font-semibold text-[#128C7E]">
-                Recommended · Faster processing
+                Optional · Faster processing
               </p>
             </div>
             <p className="text-xs sm:text-sm text-gray-700 leading-snug">
@@ -214,78 +321,15 @@ const TransactionSuccess = ({
             <button
               type="button"
               onClick={handleWhatsAppShare}
-              className="w-full min-h-[48px] sm:min-h-[52px] flex items-center justify-center gap-2 py-2.5 px-4 bg-[#25D366] hover:bg-[#1ebe57] active:bg-[#128C7E] text-white rounded-xl font-bold text-sm sm:text-base shadow-md"
+              className="w-full min-h-[48px] flex items-center justify-center gap-2 py-2.5 px-3 bg-[#25D366] hover:bg-[#1ebe57] active:bg-[#128C7E] text-white rounded-xl font-bold text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#128C7E] focus-visible:ring-offset-2"
             >
               <MessageCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
-              <span>Send Order Details on WhatsApp →</span>
+              <span className="text-center leading-snug">Send Order Details on WhatsApp</span>
             </button>
             <p className="text-[11px] sm:text-xs text-center text-gray-500 leading-snug">
               Optional — Your order is already recorded even if you skip WhatsApp.
             </p>
           </div>
-
-          {offerConversion && conversionStep === 'offer' && (
-            <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-3 sm:p-4 space-y-2">
-              <h4 className="text-[15px] sm:text-base font-bold text-slate-900">
-                Create your FishMart account
-              </h4>
-              <p className="text-xs sm:text-sm text-gray-700 leading-snug">
-                Your order is placed successfully. Create your FishMart account to save this
-                address and view your orders next time.
-              </p>
-              {conversionMessage ? (
-                <p className="text-xs sm:text-sm text-amber-800">{conversionMessage}</p>
-              ) : null}
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  disabled={conversionBusy}
-                  onClick={handleCreateAccountClick}
-                  className="flex-1 min-h-[44px] py-2.5 px-4 bg-cyan-700 hover:bg-cyan-800 disabled:opacity-60 text-white rounded-xl font-semibold text-sm"
-                >
-                  {conversionBusy ? 'Creating account...' : 'Create Account'}
-                </button>
-                <button
-                  type="button"
-                  disabled={conversionBusy}
-                  onClick={handleContinueAsGuestClick}
-                  className="flex-1 min-h-[44px] py-2.5 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm"
-                >
-                  Continue as Guest
-                </button>
-              </div>
-            </div>
-          )}
-
-          {conversionStep === 'address' && (
-            <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-3 sm:p-4 space-y-2">
-              <h4 className="text-[15px] sm:text-base font-bold text-slate-900">
-                Save this delivery address for your next order?
-              </h4>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  disabled={conversionBusy}
-                  onClick={handleSaveAddressClick}
-                  className="flex-1 min-h-[44px] py-2.5 px-4 bg-cyan-700 hover:bg-cyan-800 disabled:opacity-60 text-white rounded-xl font-semibold text-sm"
-                >
-                  {conversionBusy ? 'Saving...' : 'Save Address'}
-                </button>
-                <button
-                  type="button"
-                  disabled={conversionBusy}
-                  onClick={handleNotNowClick}
-                  className="flex-1 min-h-[44px] py-2.5 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm"
-                >
-                  Not Now
-                </button>
-              </div>
-            </div>
-          )}
-
-          {conversionMessage && conversionStep === 'done' ? (
-            <p className="text-xs sm:text-sm text-amber-800">{conversionMessage}</p>
-          ) : null}
 
           {/* 3–5. Order Information / Summary / Delivery */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">

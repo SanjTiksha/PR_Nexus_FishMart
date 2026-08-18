@@ -236,7 +236,13 @@ describe('guest conversion source safety', () => {
     assert.match(ui, /createSaveAddressInFlightGuard/);
     assert.match(ui, /runSaveConvertedAddressOnce/);
     assert.match(ui, /disabled=\{conversionBusy\}/);
+    assert.match(ui, /Save your details for next time/);
+    assert.match(ui, /No OTP required/);
+    assert.match(ui, /Account created successfully/);
+    assert.match(ui, /Save this delivery address\?/);
+    assert.match(ui, /onCreateAccount\(\)/);
     assert.match(app, /createCustomerAddress\(auth\.currentUser, input\)/);
+    assert.match(app, /shouldOfferGuestConversion\(\s*showTransactionSuccess\.order,\s*null,/);
     assert.equal(app.includes('isDefault'), false);
   });
 });

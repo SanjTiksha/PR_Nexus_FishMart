@@ -911,9 +911,11 @@ function App() {
               isOpen={showTransactionSuccess.show}
               order={showTransactionSuccess.order}
               shopInfo={fishData?.shopInfo}
+              // Guest-order snapshot only. Do not use live Auth, or Create Account
+              // disappears after sign-in while this success modal is still open.
               offerConversion={shouldOfferGuestConversion(
                 showTransactionSuccess.order,
-                auth.currentUser,
+                null,
               )}
               onCreateAccount={handleCreateAccountFromOrder}
               onSaveConvertedAddress={handleSaveConvertedAddress}
