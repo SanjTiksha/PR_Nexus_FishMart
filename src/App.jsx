@@ -40,6 +40,7 @@ import {
   stripConversionSecrets,
   toSavedAddressInputFromDelivery,
 } from './services/guestCheckoutConversion';
+import { isAccountExperiencePath } from './services/accountExperiencePath';
 import {
   normalizeDeliveryPreference,
   normalizeSlot,
@@ -64,6 +65,9 @@ const VoiceSearch = lazy(() => import('./components/VoiceSearch'));
 
 const lazyFallback = (
   <EnhancedLoadingSpinner message="Loading Fresh Fish Data..." size="large" />
+);
+const accountLazyFallback = (
+  <EnhancedLoadingSpinner message="Loading your account..." size="large" />
 );
 
 const ScrollToTop = ({ enabled }) => {
@@ -116,6 +120,17 @@ const deduplicateFish = (fishArray) => {
 };
 
 function App() {
+  return (
+    <Router basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+      <AppShell />
+    </Router>
+  );
+}
+
+function AppShell() {
+  const location = useLocation();
+  const accountExperience = isAccountExperiencePath(location.pathname);
+  const catalogLoadStartedRef = useRef(false);
   const [fishData, setFishData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useLocalStorage('shoppingCart', []);
@@ -186,6 +201,10 @@ function App() {
   const { theme } = useTheme();
 
   useEffect(() => {
+    if (accountExperience) return undefined;
+    if (catalogLoadStartedRef.current) return undefined;
+    catalogLoadStartedRef.current = true;
+
     // Load fish data directly from Firestore (no caching)
     const loadFishData = async () => {
       try {
@@ -306,7 +325,7 @@ function App() {
     };
 
     loadFishData();
-  }, [addNotification]);
+  }, [accountExperience, addNotification]);
 
   // Refresh fish data directly from Firestore (no caching)
   const refreshFishData = async () => {
@@ -790,41 +809,43 @@ function App() {
     }
   };
 
-  if (loading) {
-    return <EnhancedLoadingSpinner message="Loading Fresh Fish Data..." size="large" />;
-  }
+  if (!accountExperience) {
+    if (loading) {
+      return <EnhancedLoadingSpinner message="Loading Fresh Fish Data..." size="large" />;
+    }
 
-  if (!fishData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-cyan-50">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Data</h2>
-          <p className="text-gray-600">Please refresh the page or contact support.</p>
+    if (!fishData) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-cyan-50">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Data</h2>
+            <p className="text-gray-600">Please refresh the page or contact support.</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    }
   }
 
   return (
-    <Router basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-cyan-50'}`}>
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-gray-900' : 'bg-cyan-50'}`}>
         <ScrollToTop enabled={!isVoiceSearchActive} />
-        {/* Promotion Popup (Professional) */}
-        <PromoPopup promotion={fishData.promotions} />
-        
-        {/* Promotion Banner */}
-        <PromoBanner promotion={fishData.promotions} />
+        {!accountExperience && fishData ? (
+          <>
+            <PromoPopup promotion={fishData.promotions} />
+            <PromoBanner promotion={fishData.promotions} />
+          </>
+        ) : null}
         
         <Header 
-          shopInfo={fishData.shopInfo} 
+          shopInfo={fishData?.shopInfo} 
           cartCount={cart.length} 
           onCartClick={() => setShowCart(true)}
         />
 
-        <AndroidAppPromo />
+        {!accountExperience ? <AndroidAppPromo /> : null}
 
         <main>
-          <Suspense fallback={lazyFallback}>
+          <Suspense fallback={accountExperience ? accountLazyFallback : lazyFallback}>
             <Routes>
             <Route path="/" element={
               <FishCatalog 
@@ -839,9 +860,9 @@ function App() {
             } />
             <Route path="/fish" element={<Navigate to="/" replace />} />
             <Route path="/home" element={<Home fishData={fishData} addToCart={addToCart} refreshFishData={refreshFishData} />} />
-            <Route path="/about" element={<About shopInfo={fishData.shopInfo} />} />
-            <Route path="/contact" element={<Contact shopInfo={fishData.shopInfo} />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy shopInfo={fishData.shopInfo} />} />
+            <Route path="/about" element={<About shopInfo={fishData?.shopInfo} />} />
+            <Route path="/contact" element={<Contact shopInfo={fishData?.shopInfo} />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy shopInfo={fishData?.shopInfo} />} />
             <Route path="/login" element={<Login />} />
             <Route path="/account" element={<Account />} />
             <Route path="/account/orders" element={<CustomerOrders />} />
@@ -851,7 +872,7 @@ function App() {
           </Suspense>
         </main>
         
-        <Footer shopInfo={fishData.shopInfo} />
+        {!accountExperience && fishData ? <Footer shopInfo={fishData.shopInfo} /> : null}
 
         {/* Shopping Cart */}
         <ShoppingCart
@@ -1021,7 +1042,6 @@ function App() {
           />
         ))}
       </div>
-    </Router>
   );
 }
 

@@ -32,6 +32,8 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
     { path: '/contact', label: 'Contact' },
   ];
 
+  const whatsappNumber = shopInfo?.whatsapp || String(shopInfo?.phone || '').replace(/[^0-9]/g, '');
+
   const isActivePath = (path) => {
     if (path === '/') return location.pathname === '/' || location.pathname === '/fish';
     return location.pathname === path;
@@ -83,8 +85,9 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
               </Link>
             )}
 
+            {whatsappNumber ? (
             <a
-              href={`https://wa.me/${shopInfo.whatsapp || shopInfo.phone.replace(/[^0-9]/g, '')}`}
+              href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
               rel="noopener noreferrer"
               className="fm-header-whatsapp hidden lg:inline-flex items-center gap-2 ml-2 px-4 py-2.5 bg-[#16a34a] text-white text-sm font-semibold rounded-xl shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500/50 focus-visible:ring-offset-2"
@@ -94,6 +97,7 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
               </span>
               <span>WhatsApp Now</span>
             </a>
+            ) : null}
 
             <button
               type="button"
@@ -190,8 +194,9 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                 </Link>
               )}
 
+              {whatsappNumber ? (
               <a
-                href={`https://wa.me/${shopInfo.whatsapp || shopInfo.phone.replace(/[^0-9]/g, '')}`}
+                href={`https://wa.me/${whatsappNumber}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="fm-header-tap flex items-center justify-center gap-2 mx-1 mt-2 px-4 py-3 min-h-[48px] bg-[#16a34a] text-white rounded-xl font-semibold shadow-sm"
@@ -202,6 +207,7 @@ const Header = ({ shopInfo, cartCount = 0, onCartClick }) => {
                 </span>
                 <span>WhatsApp Now</span>
               </a>
+              ) : null}
 
               <button
                 type="button"

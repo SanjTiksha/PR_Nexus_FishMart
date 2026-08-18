@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
+import AccountLayout from '../components/AccountLayout';
 import DeliveryLocationPicker from '../components/DeliveryLocationPicker';
 import EnhancedLoadingSpinner from '../components/EnhancedLoadingSpinner';
 import { getAccountRedirectPath } from '../services/customerSession';
@@ -19,12 +20,6 @@ import {
   updateCustomerAddress,
 } from '../services/customerAddresses';
 
-const COMING_SOON_NAV = [
-  { id: 'reorder', emoji: '🔄', label: 'Buy Again' },
-  { id: 'favourites', emoji: '❤️', label: 'Favourites' },
-  { id: 'rewards', emoji: '🎁', label: 'Rewards' },
-];
-
 const EMPTY_FORM = {
   label: 'Home',
   fullName: '',
@@ -32,18 +27,6 @@ const EMPTY_FORM = {
   address: '',
   landmark: '',
 };
-
-const ComingSoonRow = ({ item }) => (
-  <li className="flex items-center justify-between gap-3 min-h-[48px] px-3 py-2">
-    <span className="flex min-w-0 items-center gap-3 font-medium text-gray-800">
-      <span aria-hidden="true">{item.emoji}</span>
-      <span className="truncate">{item.label}</span>
-    </span>
-    <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-400">
-      Coming soon
-    </span>
-  </li>
-);
 
 const digitsOnly = (value) => String(value || '').replace(/\D/g, '').slice(0, 10);
 
@@ -211,61 +194,14 @@ const CustomerAddresses = () => {
   const atLimit = addresses.length >= MAX_CUSTOMER_ADDRESSES;
 
   return (
-    <div className="min-h-screen bg-cyan-50 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-        <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8 lg:items-start">
-          <aside className="hidden lg:block">
-            <nav className="card p-4 sticky top-24" aria-label="Account navigation">
-              <p className="px-3 pt-1 pb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                My Account
-              </p>
-              <ul className="space-y-1">
-                <li>
-                  <Link
-                    to="/account"
-                    className="flex items-center gap-3 px-3 py-3 min-h-[48px] rounded-xl text-gray-800 font-medium hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
-                  >
-                    <span aria-hidden="true">👤</span>
-                    Overview
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/account/orders"
-                    className="flex items-center gap-3 px-3 py-3 min-h-[48px] rounded-xl text-gray-800 font-medium hover:bg-cyan-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
-                  >
-                    <span aria-hidden="true">📦</span>
-                    My Orders
-                  </Link>
-                </li>
-                <li>
-                  <span
-                    className="flex items-center gap-3 px-3 py-3 min-h-[48px] rounded-xl bg-cyan-50 text-gray-900 font-semibold"
-                    aria-current="page"
-                  >
-                    <span aria-hidden="true">📍</span>
-                    Addresses
-                  </span>
-                </li>
-                {COMING_SOON_NAV.map((item) => (
-                  <ComingSoonRow key={item.id} item={item} />
-                ))}
-              </ul>
-            </nav>
-          </aside>
-
+    <>
+    <AccountLayout current="addresses">
           <div className="space-y-4 min-w-0">
-            <section className="card p-5 sm:p-6">
-              <Link
-                to="/account"
-                className="inline-flex min-h-[44px] items-center text-sm font-semibold text-[#087EA4] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40"
-              >
-                ← Account
-              </Link>
-              <h1 className="mt-2 text-2xl sm:text-3xl font-bold text-gray-900 leading-snug">
+            <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-snug">
                 Saved Addresses
               </h1>
-              <p className="mt-2 text-sm sm:text-base text-gray-600">
+              <p className="mt-1 text-sm text-gray-600">
                 Save your delivery details for faster checkout.
               </p>
               {mode === 'list' ? (
@@ -273,7 +209,7 @@ const CustomerAddresses = () => {
                   type="button"
                   onClick={openCreate}
                   disabled={atLimit}
-                  className="mt-5 flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-[#087EA4] px-6 text-base font-bold text-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40 disabled:opacity-50"
+                  className="mt-3 flex w-full min-h-[48px] items-center justify-center rounded-xl bg-[#087EA4] px-6 text-base font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#087EA4]/40 disabled:opacity-50"
                 >
                   + Add Address
                 </button>
@@ -284,20 +220,20 @@ const CustomerAddresses = () => {
             </section>
 
             {loadStatus === 'loading' ? (
-              <section className="card p-6 text-center">
+              <section className="rounded-xl border border-gray-200 bg-white p-4 text-center">
                 <p className="text-base font-semibold text-gray-800">Loading your addresses...</p>
               </section>
             ) : null}
 
             {loadStatus === 'unavailable' ? (
-              <section className="card p-6 text-center space-y-4">
+              <section className="rounded-xl border border-gray-200 bg-white p-4 text-center space-y-4">
                 <p className="text-base font-semibold text-gray-900" role="alert">
                   {ADDRESSES_UNAVAILABLE_MESSAGE}
                 </p>
                 <button
                   type="button"
                   onClick={() => loadAddresses(firebaseUser)}
-                  className="mx-auto flex w-full max-w-xs min-h-[48px] items-center justify-center rounded-2xl bg-[#087EA4] px-6 text-base font-bold text-white"
+                  className="mx-auto flex w-full max-w-xs min-h-[48px] items-center justify-center rounded-xl bg-[#087EA4] px-6 text-base font-bold text-white"
                 >
                   Retry
                 </button>
@@ -305,7 +241,7 @@ const CustomerAddresses = () => {
             ) : null}
 
             {mode === 'form' ? (
-              <section className="card p-5 sm:p-6">
+              <section className="rounded-xl border border-gray-200 bg-white p-3 sm:p-5">
                 <h2 className="text-lg font-bold text-gray-900">
                   {editingId ? 'Edit address' : 'Add address'}
                 </h2>
@@ -318,7 +254,7 @@ const CustomerAddresses = () => {
                           key={label}
                           type="button"
                           onClick={() => setForm((current) => ({ ...current, label }))}
-                          className={`min-h-[48px] rounded-2xl border text-sm font-semibold ${
+                          className={`min-h-[48px] rounded-xl border text-sm font-semibold ${
                             form.label === label
                               ? 'border-[#087EA4] bg-cyan-50 text-gray-900'
                               : 'border-gray-200 bg-white text-gray-700'
@@ -339,7 +275,7 @@ const CustomerAddresses = () => {
                       }
                       maxLength={80}
                       autoComplete="name"
-                      className="mt-1 w-full min-h-[48px] rounded-2xl border border-gray-200 px-4 text-base text-gray-900"
+                      className="mt-1 w-full min-h-[48px] rounded-xl border border-gray-200 px-4 text-base text-gray-900"
                       required
                     />
                   </label>
@@ -354,7 +290,7 @@ const CustomerAddresses = () => {
                       inputMode="numeric"
                       maxLength={10}
                       autoComplete="tel"
-                      className="mt-1 w-full min-h-[48px] rounded-2xl border border-gray-200 px-4 text-base text-gray-900"
+                      className="mt-1 w-full min-h-[48px] rounded-xl border border-gray-200 px-4 text-base text-gray-900"
                       required
                     />
                   </label>
@@ -368,7 +304,7 @@ const CustomerAddresses = () => {
                       }
                       rows={3}
                       maxLength={500}
-                      className="mt-1 w-full rounded-2xl border border-gray-200 px-4 py-3 text-base text-gray-900 break-words"
+                      className="mt-1 w-full rounded-xl border border-gray-200 px-4 py-3 text-base text-gray-900 break-words"
                       required
                     />
                   </label>
@@ -381,7 +317,7 @@ const CustomerAddresses = () => {
                         setForm((current) => ({ ...current, landmark: event.target.value }))
                       }
                       maxLength={120}
-                      className="mt-1 w-full min-h-[48px] rounded-2xl border border-gray-200 px-4 text-base text-gray-900"
+                      className="mt-1 w-full min-h-[48px] rounded-xl border border-gray-200 px-4 text-base text-gray-900"
                     />
                   </label>
 
@@ -400,7 +336,7 @@ const CustomerAddresses = () => {
                   {editingId ? (
                     editingId === defaultAddressId ? (
                       <div
-                        className="flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-[#087EA4] bg-cyan-50 px-4 text-sm font-semibold text-gray-900"
+                        className="flex w-full min-h-[48px] items-center justify-center rounded-xl border border-[#087EA4] bg-cyan-50 px-4 text-sm font-semibold text-gray-900"
                         aria-current="true"
                       >
                         Default address
@@ -410,7 +346,7 @@ const CustomerAddresses = () => {
                         type="button"
                         onClick={() => setSetAsDefault((current) => !current)}
                         aria-pressed={setAsDefault}
-                        className={`flex w-full min-h-[48px] items-center justify-center rounded-2xl border px-4 text-sm font-semibold ${
+                        className={`flex w-full min-h-[48px] items-center justify-center rounded-xl border px-4 text-sm font-semibold ${
                           setAsDefault
                             ? 'border-[#087EA4] bg-cyan-50 text-gray-900'
                             : 'border-gray-200 bg-white text-gray-900'
@@ -424,14 +360,14 @@ const CustomerAddresses = () => {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-[#087EA4] px-6 text-base font-bold text-white disabled:opacity-60"
+                    className="flex w-full min-h-[48px] items-center justify-center rounded-xl bg-[#087EA4] px-6 text-base font-bold text-white disabled:opacity-60"
                   >
                     {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Save Address'}
                   </button>
                   <button
                     type="button"
                     onClick={closeForm}
-                    className="flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 text-base font-semibold text-gray-900"
+                    className="flex w-full min-h-[48px] items-center justify-center rounded-xl border border-gray-200 bg-white px-6 text-base font-semibold text-gray-900"
                   >
                     Cancel
                   </button>
@@ -440,46 +376,46 @@ const CustomerAddresses = () => {
             ) : null}
 
             {mode === 'list' && loadStatus === 'ok' && views.length === 0 ? (
-              <section className="card p-6 text-center">
+              <section className="rounded-xl border border-gray-200 bg-white p-4 text-center">
                 <p className="text-base text-gray-600">No saved delivery addresses yet.</p>
               </section>
             ) : null}
 
             {mode === 'list' && loadStatus === 'ok' ? (
-              <section className="space-y-3" aria-label="Saved addresses">
+              <section className="space-y-2" aria-label="Saved addresses">
                 {views.map((view) => (
                   <article
                     key={view.addressId}
-                    className="rounded-3xl border border-gray-100 bg-white p-4 shadow-sm min-w-0"
+                    className="rounded-xl border border-gray-200 bg-white p-3 min-w-0"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <p className="min-w-0 truncate text-base font-bold text-gray-900">{view.label}</p>
+                      <p className="min-w-0 break-words text-sm font-bold text-gray-900">{view.label}</p>
                       {view.isDefault ? (
                         <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800">
                           Default
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-2 break-words font-semibold text-gray-900">{view.fullName}</p>
+                    <p className="mt-1 break-words font-semibold text-gray-900">{view.fullName}</p>
                     {view.mobileMasked ? (
                       <p className="text-sm text-gray-700">{view.mobileMasked}</p>
                     ) : null}
                     <p className="mt-1 break-words text-sm text-gray-700">{view.address}</p>
-                    <p className="mt-2 text-xs font-semibold text-green-800">
+                    <p className="mt-1.5 text-xs font-semibold text-green-800">
                       {view.locationConfirmed ? 'Location confirmed' : 'Location needed'}
                     </p>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="mt-3 grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => openEdit(addresses.find((item) => item.addressId === view.addressId))}
-                        className="min-h-[48px] rounded-2xl border border-gray-200 bg-cyan-50 px-3 text-sm font-bold text-gray-900"
+                        className="min-h-[44px] rounded-xl border border-gray-200 bg-cyan-50 px-3 text-sm font-bold text-gray-900"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => setPendingDelete(view)}
-                        className="min-h-[48px] rounded-2xl border border-red-100 bg-white px-3 text-sm font-bold text-red-700"
+                        className="min-h-[44px] rounded-xl border border-red-100 bg-white px-3 text-sm font-bold text-red-700"
                       >
                         Delete
                       </button>
@@ -488,7 +424,7 @@ const CustomerAddresses = () => {
                       <button
                         type="button"
                         onClick={() => handleSetDefault(view.addressId)}
-                        className="mt-2 flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900"
+                        className="mt-2 flex w-full min-h-[44px] items-center justify-center rounded-xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900"
                       >
                         Set as Default
                       </button>
@@ -498,19 +434,18 @@ const CustomerAddresses = () => {
               </section>
             ) : null}
           </div>
-        </div>
-      </div>
+    </AccountLayout>
 
       {pendingDelete ? (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <h2 className="text-lg font-bold text-gray-900">Delete this address?</h2>
             <p className="mt-2 text-sm text-gray-600">This saved delivery address will be removed.</p>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setPendingDelete(null)}
-                className="min-h-[48px] rounded-2xl border border-gray-200 bg-white font-semibold text-gray-900"
+                className="min-h-[48px] rounded-xl border border-gray-200 bg-white font-semibold text-gray-900"
               >
                 Cancel
               </button>
@@ -518,7 +453,7 @@ const CustomerAddresses = () => {
                 type="button"
                 onClick={confirmDelete}
                 disabled={saving}
-                className="min-h-[48px] rounded-2xl bg-red-600 font-bold text-white disabled:opacity-60"
+                className="min-h-[48px] rounded-xl bg-red-600 font-bold text-white disabled:opacity-60"
               >
                 Delete
               </button>
@@ -526,7 +461,7 @@ const CustomerAddresses = () => {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 };
 

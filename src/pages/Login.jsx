@@ -312,19 +312,16 @@ const Login = () => {
   }
 
   return (
-    <div className="min-h-screen bg-cyan-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="flex items-start sm:items-center justify-center py-6 px-3 sm:px-6 lg:px-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="max-w-md w-full space-y-5">
         <div className="text-center">
-          <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🐟</span>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">Login to FishMart</h1>
-          <p className="mt-2 text-gray-600">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Login to FishMart</h1>
+          <p className="mt-1 text-sm text-gray-600">
             Verify your Indian mobile number to continue
           </p>
         </div>
 
-        <div className="card p-8 space-y-5">
+        <div className="rounded-xl border border-gray-200 bg-white p-4 sm:p-6 space-y-4">
           {loginSuccessful && (
             <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-4 text-sm text-green-800 space-y-3">
               <p className="font-semibold">Login successful</p>
@@ -369,7 +366,7 @@ const Login = () => {
                   value={mobileNumber}
                   onChange={handleMobileChange}
                   disabled={showOtpPanel}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-r-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent disabled:bg-gray-100"
+                  className="w-full min-h-[48px] px-4 border border-gray-300 rounded-r-xl focus:ring-2 focus:ring-[#087EA4] focus:border-transparent disabled:bg-gray-100"
                   placeholder="10-digit mobile number"
                 />
               </div>
@@ -386,7 +383,7 @@ const Login = () => {
             </p>
             <div
               id={MSG91_LOGIN_CAPTCHA_RENDER_ID}
-              className="min-h-[78px] flex justify-center items-center overflow-x-auto"
+              className="min-h-[78px] max-w-full flex justify-center items-center overflow-hidden"
             />
             {captchaInitError && (
               <p className="text-xs text-red-600">{captchaInitError}</p>
@@ -411,7 +408,7 @@ const Login = () => {
               disabled={
                 sendingOtp || !mobileValid || !captchaReady || !captchaSolved
               }
-              className="w-full btn-primary text-lg py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full min-h-[48px] rounded-xl bg-[#087EA4] text-base font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sendingOtp ? (
                 <div className="flex items-center justify-center">
@@ -446,7 +443,7 @@ const Login = () => {
                   setOtp(digits);
                   setOtpError('');
                 }}
-                className="w-full px-3 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-[0.4em] font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full min-h-[48px] px-3 border border-gray-300 rounded-lg text-center text-2xl tracking-[0.4em] font-semibold focus:ring-2 focus:ring-[#087EA4] focus:border-transparent"
                 placeholder="••••"
                 aria-label="4-digit OTP"
               />
@@ -464,12 +461,12 @@ const Login = () => {
                 {verifyingOtp ? 'Verifying…' : 'Verify OTP'}
               </button>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-2 text-sm">
                 <button
                   type="button"
                   onClick={handleResendOtp}
                   disabled={resendSeconds > 0 || resendingOtp}
-                  className="font-semibold text-blue-700 disabled:text-gray-400"
+                  className="min-h-[44px] font-semibold text-[#087EA4] disabled:text-gray-400"
                 >
                   {resendingOtp
                     ? 'Resending…'
@@ -480,7 +477,7 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={handleChangeMobile}
-                  className="font-semibold text-gray-700 underline"
+                  className="min-h-[44px] font-semibold text-gray-700 underline"
                 >
                   Change mobile number
                 </button>
@@ -495,7 +492,7 @@ const Login = () => {
           )}
 
           <p className="text-center text-sm text-gray-500">
-            <Link to="/" className="text-blue-700 font-semibold hover:underline">
+            <Link to="/" className="inline-flex min-h-[44px] items-center text-[#087EA4] font-semibold">
               Return to FishMart
             </Link>
           </p>
