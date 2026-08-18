@@ -18,6 +18,7 @@ import { db, auth } from "../firebaseConfig";
 import fishDataFallback from "../data/fishData.json";
 import { normalizeDeliveryChargeRupees } from "../utils/moneyUtils";
 import { applyOrderCustomerOwnership } from "./orderCustomerOwnership.js";
+import { isValidConversionNonce } from "./guestCheckoutConversion.js";
 
 // Helper to deduplicate fish array by id and name (keep first occurrence)
 const deduplicateFish = (fishArray) => {
@@ -1596,6 +1597,11 @@ export const createCustomerOrder = async (order) => {
   });
   if (payload.customerUid == null) {
     delete payload.customerUid;
+  } else {
+    delete payload.conversionNonce;
+  }
+  if (!isValidConversionNonce(payload.conversionNonce)) {
+    delete payload.conversionNonce;
   }
 
   const orderRef = doc(db, COLLECTIONS.ORDERS, String(ownedOrder.orderId));

@@ -27,8 +27,19 @@ import {
 } from './utils/cartPricing';
 import { normalizeDeliveryChargeRupees } from './utils/moneyUtils';
 import { auth } from './firebaseConfig';
+import { signInWithCustomToken } from 'firebase/auth';
 import { isDeliveryReadyForPaymentGate } from './services/checkoutCustomerDelivery';
 import { createCustomerOrder, incrementOfferUsage } from './services/firestoreService';
+import { ensureCustomerProfile } from './services/customerProfile';
+import { createCustomerAddress } from './services/customerAddresses';
+import {
+  exchangeVerifiedTokenForGuestConversion,
+  generateConversionNonce,
+  isValidConversionNonce,
+  shouldOfferGuestConversion,
+  stripConversionSecrets,
+  toSavedAddressInputFromDelivery,
+} from './services/guestCheckoutConversion';
 import {
   normalizeDeliveryPreference,
   normalizeSlot,
@@ -148,6 +159,8 @@ function App() {
     total: 0,
   });
   const cartSnapshotRef = useRef([]);
+  const checkoutVerifiedTokenRef = useRef('');
+  const conversionNonceRef = useRef('');
   
   // 3-Step Checkout Flow States
   const [showCheckoutConfirmation, setShowCheckoutConfirmation] = useState(false);
@@ -484,7 +497,13 @@ function App() {
   };
 
   // Step 1 to Step 2: Proceed to Payment — recalculate & lock amount + payment ref
-  const handleProceedToPayment = (deliveryInfo) => {
+  const handleProceedToPayment = (deliveryInfo, checkoutProof) => {
+    const verifiedToken =
+      typeof checkoutProof?.verifiedToken === 'string'
+        ? checkoutProof.verifiedToken.trim()
+        : '';
+    checkoutVerifiedTokenRef.current = verifiedToken;
+
     // Payment gate — MSG91 OTP or approved Auth-mobile match. Do not start QR/payment without it.
     if (!isDeliveryReadyForPaymentGate(auth.currentUser, deliveryInfo)) {
       addNotification(
@@ -674,13 +693,24 @@ function App() {
       merchantUpiId: paymentSession?.merchantUpiId || resolveMerchantUpiId(fishData?.shopInfo),
     };
 
+    const conversionNonce = generateConversionNonce();
+    if (isValidConversionNonce(conversionNonce)) {
+      orderSummary.conversionNonce = conversionNonce;
+      conversionNonceRef.current = conversionNonce;
+    }
+
     try {
       // Firestore write must succeed before TransactionSuccess is shown
       const savedOrder = await createCustomerOrder(orderSummary);
+      const publicOrder = stripConversionSecrets(savedOrder);
+      if (publicOrder.customerUid) {
+        conversionNonceRef.current = '';
+        checkoutVerifiedTokenRef.current = '';
+      }
 
       const orders = JSON.parse(localStorage.getItem('orders') || '[]');
-      const withoutSameId = orders.filter((o) => o?.orderId !== savedOrder.orderId);
-      withoutSameId.push(savedOrder);
+      const withoutSameId = orders.filter((o) => o?.orderId !== publicOrder.orderId);
+      withoutSameId.push(publicOrder);
       localStorage.setItem('orders', JSON.stringify(withoutSameId));
 
       // Count offer use only after the order is recorded
@@ -694,7 +724,7 @@ function App() {
 
       setShowTransactionSuccess({
         show: true,
-        order: savedOrder,
+        order: publicOrder,
       });
 
       addNotification(
@@ -702,7 +732,7 @@ function App() {
         'success',
       );
 
-      return { success: true, order: savedOrder };
+      return { success: true, order: publicOrder };
     } catch (error) {
       console.error('Failed to record order in Firestore:', error);
       addNotification(
@@ -713,6 +743,41 @@ function App() {
       // Keep QR modal / payment session intact so customer can retry without a new order ID
       return { success: false, error };
     }
+  };
+
+  const clearGuestConversionSecrets = () => {
+    checkoutVerifiedTokenRef.current = '';
+    conversionNonceRef.current = '';
+  };
+
+  const handleCreateAccountFromOrder = async () => {
+    const orderId = showTransactionSuccess.order?.orderId;
+    try {
+      const exchanged = await exchangeVerifiedTokenForGuestConversion({
+        token: checkoutVerifiedTokenRef.current,
+        orderId,
+        conversionNonce: conversionNonceRef.current,
+      });
+      await signInWithCustomToken(auth, exchanged.customToken);
+      checkoutVerifiedTokenRef.current = '';
+      await ensureCustomerProfile(auth.currentUser);
+      if (exchanged.orderLinked) {
+        conversionNonceRef.current = '';
+        return { status: 'linked' };
+      }
+      return { status: 'unlinked' };
+    } catch {
+      return { status: 'failed' };
+    }
+  };
+
+  const handleSaveConvertedAddress = async () => {
+    const input = toSavedAddressInputFromDelivery(
+      showTransactionSuccess.order?.deliveryInfo,
+    );
+    if (!input) return { status: 'failed' };
+    const result = await createCustomerAddress(auth.currentUser, input);
+    return result?.status === 'ok' ? { status: 'ok' } : { status: 'failed' };
   };
 
   const toggleFavorite = (fishId) => {
@@ -812,9 +877,8 @@ function App() {
               orderSummary={currentCheckoutSummary}
               deliveryPreference={deliveryPreference}
               onDeliveryPreferenceChange={setDeliveryPreference}
-              onProceedToPayment={(deliveryInfo) => {
-                console.log('📞 App.jsx: onProceedToPayment callback called with deliveryInfo:', deliveryInfo);
-                handleProceedToPayment(deliveryInfo);
+              onProceedToPayment={(deliveryInfo, checkoutProof) => {
+                handleProceedToPayment(deliveryInfo, checkoutProof);
               }}
             />
           </Suspense>
@@ -847,16 +911,22 @@ function App() {
               isOpen={showTransactionSuccess.show}
               order={showTransactionSuccess.order}
               shopInfo={fishData?.shopInfo}
+              offerConversion={shouldOfferGuestConversion(
+                showTransactionSuccess.order,
+                auth.currentUser,
+              )}
+              onCreateAccount={handleCreateAccountFromOrder}
+              onSaveConvertedAddress={handleSaveConvertedAddress}
+              onContinueAsGuest={clearGuestConversionSecrets}
               onClose={() => {
                 setShowTransactionSuccess({ show: false, order: null });
-                // Clean up temporary delivery info after modal is closed
+                clearGuestConversionSecrets();
                 localStorage.removeItem('currentOrderDeliveryInfo');
               }}
               onContinueShopping={() => {
                 setShowTransactionSuccess({ show: false, order: null });
-                // Clean up temporary delivery info after modal is closed
+                clearGuestConversionSecrets();
                 localStorage.removeItem('currentOrderDeliveryInfo');
-                // Optionally redirect to fish catalog
               }}
             />
           </Suspense>

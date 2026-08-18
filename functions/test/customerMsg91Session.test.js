@@ -98,7 +98,11 @@ describe('verifyCustomerMsg91Token', () => {
         return MOCK_CUSTOM_TOKEN;
       },
     });
-    assert.deepEqual(result, { ok: true, customToken: MOCK_CUSTOM_TOKEN });
+    assert.deepEqual(result, {
+      ok: true,
+      customToken: MOCK_CUSTOM_TOKEN,
+      uid: 'phone_919999999999',
+    });
   });
 
   it('normalizes a 10-digit message to the same UID', async () => {
@@ -208,7 +212,11 @@ describe('verifyCustomerMsg91Token', () => {
       createCustomToken: async () => MOCK_CUSTOM_TOKEN,
     });
 
-    assert.deepEqual(result, { ok: true, customToken: MOCK_CUSTOM_TOKEN });
+    assert.deepEqual(result, {
+      ok: true,
+      customToken: MOCK_CUSTOM_TOKEN,
+      uid: 'phone_919999999999',
+    });
     assert.equal(captured.url, MSG91_VERIFY_ACCESS_TOKEN_URL);
     const sent = JSON.parse(captured.options.body);
     assert.deepEqual(sent, {
@@ -339,5 +347,72 @@ describe('handleCustomerMsg91Session', () => {
     assert.equal(res.statusCode, 500);
     assert.deepEqual(JSON.parse(res.body), { error: 'Verification unavailable' });
     assert.equal(String(res.body).includes('admin-failed'), false);
+  });
+
+  it('keeps login response as customToken only when conversion fields are absent', async () => {
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token', mobile: '9999999999' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, successDeps);
+    assert.equal(res.statusCode, 200);
+    const parsedBody = JSON.parse(res.body);
+    assert.deepEqual(Object.keys(parsedBody), ['customToken']);
+  });
+
+  it('creates a session and reports orderLinked without failing Auth when claim fails', async () => {
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: {
+        token: 'widget-token',
+        orderId: 'ORDER_1770000000000',
+        conversionNonce: 'a'.repeat(64),
+      },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      claimGuestCheckoutOrder: async () => ({ ok: false, reason: 'nonce' }),
+    });
+    assert.equal(res.statusCode, 200);
+    const parsedBody = JSON.parse(res.body);
+    assert.equal(parsedBody.customToken, MOCK_CUSTOM_TOKEN);
+    assert.equal(parsedBody.orderLinked, false);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'uid'), false);
+    assert.equal(String(res.body).includes('a'.repeat(64)), false);
+  });
+
+  it('reports orderLinked true after a successful claim and does not leak uid', async () => {
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: {
+        token: 'widget-token',
+        orderId: 'ORDER_1770000000000',
+        conversionNonce: 'b'.repeat(64),
+      },
+    });
+    const res = mockRes();
+    let claimedUid = '';
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      claimGuestCheckoutOrder: async ({ uid }) => {
+        claimedUid = uid;
+        return { ok: true, reason: 'linked' };
+      },
+    });
+    assert.equal(res.statusCode, 200);
+    const parsedBody = JSON.parse(res.body);
+    assert.equal(parsedBody.customToken, MOCK_CUSTOM_TOKEN);
+    assert.equal(parsedBody.orderLinked, true);
+    assert.equal(claimedUid, 'phone_919999999999');
+    assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'uid'), false);
+    assert.equal(String(res.body).includes('phone_919999999999'), false);
   });
 });

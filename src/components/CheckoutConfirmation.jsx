@@ -38,6 +38,7 @@ import {
   toCheckoutAddressCard,
   toCheckoutDeliverySnapshot,
 } from '../services/checkoutCustomerDelivery';
+import { captureCheckoutVerifiedToken } from '../services/guestCheckoutConversion';
 import { getCustomerAddresses } from '../services/customerAddresses';
 import {
   groupAvailableOptionsByDay,
@@ -102,6 +103,7 @@ const CheckoutConfirmation = ({
   const reqIdRef = useRef('');
   const busyRef = useRef(false);
   const savedAddressesLoadedForUidRef = useRef('');
+  const verifiedTokenRef = useRef('');
 
   useEffect(() => {
     if (isOpen) {
@@ -131,6 +133,7 @@ const CheckoutConfirmation = ({
       reqIdRef.current = '';
       busyRef.current = false;
       savedAddressesLoadedForUidRef.current = '';
+      verifiedTokenRef.current = '';
       setDeliveryInfo({
         customerName: '',
         mobileNumber: '',
@@ -242,6 +245,7 @@ const CheckoutConfirmation = ({
       setOtpMessage('');
       setResendSeconds(0);
       reqIdRef.current = '';
+      verifiedTokenRef.current = '';
       return;
     }
     if (mobileVerified && verifiedMobile && verifiedMobile === normalized) {
@@ -255,6 +259,7 @@ const CheckoutConfirmation = ({
     setOtpError('');
     setResendSeconds(0);
     reqIdRef.current = '';
+    verifiedTokenRef.current = '';
   };
 
   const applySavedAddressSnapshot = (address, user) => {
@@ -420,7 +425,8 @@ const CheckoutConfirmation = ({
 
     try {
       await ensureMsg91OtpReady();
-      await verifyMsg91Otp(otp, reqIdRef.current || undefined);
+      const verifyData = await verifyMsg91Otp(otp, reqIdRef.current || undefined);
+      verifiedTokenRef.current = captureCheckoutVerifiedToken(verifyData);
 
       const mobile = normalizeIndianMobile(deliveryInfo.mobileNumber);
       setMobileVerified(true);
@@ -431,6 +437,7 @@ const CheckoutConfirmation = ({
       setOtpError('');
       setResendSeconds(0);
     } catch {
+      verifiedTokenRef.current = '';
       setMobileVerified(false);
       setVerifiedMobile('');
       setOtpError('Invalid or expired OTP. Please try again.');
@@ -520,7 +527,9 @@ const CheckoutConfirmation = ({
     }
 
     if (onProceedToPayment) {
-      onProceedToPayment(payload);
+      onProceedToPayment(payload, {
+        verifiedToken: verifiedTokenRef.current,
+      });
     }
   };
 

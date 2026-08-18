@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CheckCircle, X, Home, ShoppingBag, MessageCircle } from 'lucide-react';
 import { calculateLineTotal, normalizeQuantity } from '../utils/quantityUtils';
 import {
@@ -7,13 +7,38 @@ import {
 } from '../utils/orderFinancialDisplay';
 import { getPaymentStatusLabel, openOrderWhatsApp } from '../utils/orderWhatsApp';
 import { formatDeliveryPreferenceLabel, slotEmoji } from '../utils/deliverySlot';
+import {
+  CONVERSION_ACCOUNT_FAILED_MESSAGE,
+  CONVERSION_ADDRESS_FAILED_MESSAGE,
+  CONVERSION_ORDER_UNLINKED_MESSAGE,
+  createSaveAddressInFlightGuard,
+  runSaveConvertedAddressOnce,
+} from '../services/guestCheckoutConversion';
 
-const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopInfo }) => {
+const TransactionSuccess = ({
+  isOpen,
+  order,
+  onClose,
+  onContinueShopping,
+  shopInfo,
+  offerConversion = false,
+  onCreateAccount,
+  onSaveConvertedAddress,
+  onContinueAsGuest,
+}) => {
   const [isAnimating, setIsAnimating] = useState(false);
+  const [conversionStep, setConversionStep] = useState('offer');
+  const [conversionBusy, setConversionBusy] = useState(false);
+  const [conversionMessage, setConversionMessage] = useState('');
+  const saveAddressGuardRef = useRef(createSaveAddressInFlightGuard());
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => setIsAnimating(true), 10);
+      setConversionStep('offer');
+      setConversionBusy(false);
+      setConversionMessage('');
+      saveAddressGuardRef.current = createSaveAddressInFlightGuard();
     } else {
       setIsAnimating(false);
     }
@@ -45,6 +70,61 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
   // Opens WhatsApp only — never writes Firestore, never creates a new order/ID
   const handleWhatsAppShare = () => {
     openOrderWhatsApp(order, shopInfo);
+  };
+
+  const handleCreateAccountClick = async () => {
+    if (conversionBusy || typeof onCreateAccount !== 'function') return;
+    setConversionBusy(true);
+    setConversionMessage('');
+    try {
+      const result = await onCreateAccount();
+      if (result?.status === 'linked') {
+        setConversionStep('address');
+        return;
+      }
+      if (result?.status === 'unlinked') {
+        setConversionStep('done');
+        setConversionMessage(CONVERSION_ORDER_UNLINKED_MESSAGE);
+        return;
+      }
+      setConversionMessage(CONVERSION_ACCOUNT_FAILED_MESSAGE);
+    } finally {
+      setConversionBusy(false);
+    }
+  };
+
+  const handleContinueAsGuestClick = () => {
+    if (typeof onContinueAsGuest === 'function') onContinueAsGuest();
+    setConversionStep('guest');
+    setConversionMessage('');
+  };
+
+  const handleSaveAddressClick = async () => {
+    if (typeof onSaveConvertedAddress !== 'function') return;
+    const result = await runSaveConvertedAddressOnce(
+      saveAddressGuardRef.current,
+      async () => {
+        setConversionBusy(true);
+        setConversionMessage('');
+        return onSaveConvertedAddress();
+      },
+    );
+    if (result.status === 'busy') return;
+    try {
+      if (result.status === 'ok') {
+        setConversionStep('done');
+        setConversionMessage('');
+        return;
+      }
+      setConversionMessage(CONVERSION_ADDRESS_FAILED_MESSAGE);
+    } finally {
+      setConversionBusy(false);
+    }
+  };
+
+  const handleNotNowClick = () => {
+    setConversionStep('done');
+    setConversionMessage('');
   };
 
   return (
@@ -143,6 +223,69 @@ const TransactionSuccess = ({ isOpen, order, onClose, onContinueShopping, shopIn
               Optional — Your order is already recorded even if you skip WhatsApp.
             </p>
           </div>
+
+          {offerConversion && conversionStep === 'offer' && (
+            <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-3 sm:p-4 space-y-2">
+              <h4 className="text-[15px] sm:text-base font-bold text-slate-900">
+                Create your FishMart account
+              </h4>
+              <p className="text-xs sm:text-sm text-gray-700 leading-snug">
+                Your order is placed successfully. Create your FishMart account to save this
+                address and view your orders next time.
+              </p>
+              {conversionMessage ? (
+                <p className="text-xs sm:text-sm text-amber-800">{conversionMessage}</p>
+              ) : null}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleCreateAccountClick}
+                  className="flex-1 min-h-[44px] py-2.5 px-4 bg-cyan-700 hover:bg-cyan-800 disabled:opacity-60 text-white rounded-xl font-semibold text-sm"
+                >
+                  {conversionBusy ? 'Creating account...' : 'Create Account'}
+                </button>
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleContinueAsGuestClick}
+                  className="flex-1 min-h-[44px] py-2.5 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm"
+                >
+                  Continue as Guest
+                </button>
+              </div>
+            </div>
+          )}
+
+          {conversionStep === 'address' && (
+            <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-3 sm:p-4 space-y-2">
+              <h4 className="text-[15px] sm:text-base font-bold text-slate-900">
+                Save this delivery address for your next order?
+              </h4>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleSaveAddressClick}
+                  className="flex-1 min-h-[44px] py-2.5 px-4 bg-cyan-700 hover:bg-cyan-800 disabled:opacity-60 text-white rounded-xl font-semibold text-sm"
+                >
+                  {conversionBusy ? 'Saving...' : 'Save Address'}
+                </button>
+                <button
+                  type="button"
+                  disabled={conversionBusy}
+                  onClick={handleNotNowClick}
+                  className="flex-1 min-h-[44px] py-2.5 px-4 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm"
+                >
+                  Not Now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {conversionMessage && conversionStep === 'done' ? (
+            <p className="text-xs sm:text-sm text-amber-800">{conversionMessage}</p>
+          ) : null}
 
           {/* 3–5. Order Information / Summary / Delivery */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-5">

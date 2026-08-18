@@ -14,6 +14,10 @@ const {
   extractVerifiedIdentifier,
   isMsg91VerificationSuccess,
 } = require('./msg91VerifyResult');
+const {
+  claimGuestCheckoutOrder,
+  parseConversionRequest,
+} = require('./claimGuestCheckoutOrder');
 
 const mintCustomToken = async (uid) => getAuth().createCustomToken(uid);
 
@@ -52,9 +56,58 @@ const verifyCustomerMsg91Token = async (token, deps = {}) => {
     if (typeof customToken !== 'string' || !customToken.trim()) {
       return { ok: false, code: 'token' };
     }
-    return { ok: true, customToken: customToken.trim() };
+    return {
+      ok: true,
+      customToken: customToken.trim(),
+      uid: identity.uid,
+    };
   } catch {
     return { ok: false, code: 'token' };
+  }
+};
+
+const defaultGetOrder = async (collectionName, orderId) => {
+  const { getFirestore } = require('firebase-admin/firestore');
+  const snap = await getFirestore().collection(collectionName).doc(orderId).get();
+  if (!snap || typeof snap.exists !== 'boolean') {
+    return { exists: false, data: null };
+  }
+  return {
+    exists: snap.exists === true,
+    data: snap.exists === true ? snap.data() : null,
+  };
+};
+
+const defaultUpdateOrder = async (collectionName, orderId, patch) => {
+  const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+  const payload = { customerUid: patch.customerUid };
+  if (patch.conversionNonce === null) {
+    payload.conversionNonce = FieldValue.delete();
+  }
+  await getFirestore().collection(collectionName).doc(orderId).update(payload);
+};
+
+const linkGuestOrderIfRequested = async (reqBody, uid, deps = {}) => {
+  const conversion = parseConversionRequest(reqBody);
+  if (!conversion.requested) {
+    return { include: false };
+  }
+  if (!conversion.ok) {
+    return { include: true, orderLinked: false };
+  }
+
+  const claim = deps.claimGuestCheckoutOrder ?? claimGuestCheckoutOrder;
+  try {
+    const result = await claim({
+      uid,
+      orderId: conversion.orderId,
+      conversionNonce: conversion.conversionNonce,
+      getOrder: deps.getOrder ?? defaultGetOrder,
+      updateOrder: deps.updateOrder ?? defaultUpdateOrder,
+    });
+    return { include: true, orderLinked: result.ok === true };
+  } catch {
+    return { include: true, orderLinked: false };
   }
 };
 
@@ -85,7 +138,12 @@ const handleCustomerMsg91Session = async (req, res, deps = {}) => {
 
   const result = await verifyCustomerMsg91Token(parsed.token, deps);
   if (result.ok) {
-    sendJson(res, 200, { customToken: result.customToken });
+    const linked = await linkGuestOrderIfRequested(req.body, result.uid, deps);
+    const body = { customToken: result.customToken };
+    if (linked.include) {
+      body.orderLinked = linked.orderLinked === true;
+    }
+    sendJson(res, 200, body);
     return;
   }
   if (result.code === 'rejected') {
