@@ -1,12 +1,21 @@
 'use strict';
 
-const { initializeApp, getApps } = require('firebase-admin/app');
+const { initializeApp, getApps, cert } = require('firebase-admin/app');
 const { onRequest } = require('firebase-functions/v2/https');
 const { handleCustomerMsg91Session } = require('./src/customerMsg91Session');
 
 // Required by the Functions runtime. Auth is used only to mint Custom Tokens.
+// Local: cert(GOOGLE_APPLICATION_CREDENTIALS) → ServiceAccountCredential, local signing.
+// Production: GAC unset → initializeApp() ADC / runtime default. Do not require a local JSON file.
 if (getApps().length === 0) {
-  initializeApp();
+  const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (typeof credentialsPath === 'string' && credentialsPath.trim()) {
+    initializeApp({
+      credential: cert(credentialsPath.trim()),
+    });
+  } else {
+    initializeApp();
+  }
 }
 
 /**
