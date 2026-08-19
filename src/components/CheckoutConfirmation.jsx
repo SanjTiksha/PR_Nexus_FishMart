@@ -47,6 +47,7 @@ import {
   exchangeVerifiedTokenForCheckoutSession,
 } from '../services/customerAuthCheckout';
 import { getCustomerAddresses } from '../services/customerAddresses';
+import { getCustomerProfile } from '../services/customerProfile';
 import {
   groupAvailableOptionsByDay,
   isTodayDeliveryClosed,
@@ -350,6 +351,40 @@ const CheckoutConfirmation = ({
     };
   }, [isOpen, showDeliveryForm, checkoutUser]);
 
+  useEffect(() => {
+    if (!isOpen || !showDeliveryForm || checkoutAccountBranch !== 'existing') {
+      return undefined;
+    }
+    if (!checkoutUser || deliveryInfo.customerName.trim()) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    getCustomerProfile(checkoutUser)
+      .then((result) => {
+        if (cancelled || result.status !== 'ok') return;
+        const displayName =
+          typeof result.profile?.displayName === 'string'
+            ? result.profile.displayName.trim()
+            : '';
+        if (!displayName) return;
+        setDeliveryInfo((prev) =>
+          prev.customerName.trim() ? prev : { ...prev, customerName: displayName },
+        );
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isOpen,
+    showDeliveryForm,
+    checkoutAccountBranch,
+    checkoutUser,
+    deliveryInfo.customerName,
+  ]);
+
   const handleProceed = () => {
     setDeliverySlotError('');
     const locked = validateDeliverySelection(
@@ -401,7 +436,7 @@ const CheckoutConfirmation = ({
     try {
       await ensureMsg91OtpReady();
       if (!isMsg91CaptchaVerified()) {
-        setOtpError('Please complete the captcha below, then click Verify Mobile.');
+        setOtpError('Please complete the captcha above, then tap Send OTP.');
         setCaptchaSolved(false);
         return;
       }
@@ -601,6 +636,24 @@ const CheckoutConfirmation = ({
     Boolean(accountMobile10 && currentMobile && currentMobile !== accountMobile10);
   const showWelcomeBack =
     checkoutAccountBranch === 'existing' && isCurrentMobileVerified;
+  const showDeliveryFields = isCurrentMobileVerified;
+  const showMobileVerificationUi =
+    !isCurrentMobileVerified && !(showSavedAddressUi && addressesLoading);
+  const showCustomerNameInput =
+    showDeliveryFields &&
+    (checkoutAccountBranch === 'guest' ||
+      (showSavedAddressUi && checkoutAccountBranch !== 'existing') ||
+      (checkoutAccountBranch === 'existing' && !deliveryInfo.customerName.trim()));
+  const showExistingCustomerName =
+    showDeliveryFields &&
+    checkoutAccountBranch === 'existing' &&
+    Boolean(deliveryInfo.customerName.trim());
+  const showManualDeliveryLocation =
+    showDeliveryFields &&
+    (checkoutAccountBranch === 'guest' ||
+      (showSavedAddressUi && !selectedCard && !addressesLoading));
+  const welcomeBackFirstName =
+    deliveryInfo.customerName.trim().split(/\s+/)[0] || '';
 
   return (
     <div
@@ -794,7 +847,11 @@ const CheckoutConfirmation = ({
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-gray-900">Delivery Information</h3>
-                    <p className="text-sm text-gray-600">Please provide your delivery details</p>
+                    <p className="text-sm text-gray-600">
+                      {showMobileVerificationUi && !showSavedAddressUi
+                        ? 'Verify your mobile number to continue'
+                        : 'Please provide your delivery details'}
+                    </p>
                   </div>
                 </div>
 
@@ -936,50 +993,61 @@ const CheckoutConfirmation = ({
                 ) : null}
 
                 <form onSubmit={handleDeliverySubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      <User className="w-4 h-4 inline mr-1" />
-                      Customer Name *
-                    </label>
-                    <input
-                      type="text"
-                      name="customerName"
-                      value={deliveryInfo.customerName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      placeholder="Enter your full name"
-                      required
-                    />
-                  </div>
+                  {/* Mobile-first OTP: mobile → captcha → Send OTP → Verify OTP */}
+                  {showMobileVerificationUi ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <Phone className="w-4 h-4 inline mr-1" />
+                          {deliveryMobileDiffers ? 'Delivery mobile *' : 'Mobile Number *'}
+                        </label>
+                        {deliveryMobileDiffers ? (
+                          <p className="mb-2 text-xs text-gray-600">
+                            This number is different from your account mobile. Verify it with OTP.
+                          </p>
+                        ) : null}
+                        <input
+                          ref={mobileInputRef}
+                          type="tel"
+                          name="mobileNumber"
+                          value={deliveryInfo.mobileNumber}
+                          onChange={handleInputChange}
+                          className="min-w-0 w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                          placeholder="Enter 10-digit mobile number"
+                          maxLength={10}
+                          inputMode="numeric"
+                          autoComplete="tel"
+                          required
+                          disabled={showOtpPanel && !isCurrentMobileVerified}
+                        />
+                      </div>
 
-                  {/* Mobile + MSG91 OTP (H-Captcha must be visible before Verify Mobile) */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      <Phone className="w-4 h-4 inline mr-1" />
-                      {deliveryMobileDiffers ? 'Delivery mobile *' : 'Mobile Number *'}
-                    </label>
-                    {deliveryMobileDiffers ? (
-                      <p className="mb-2 text-xs text-gray-600">
-                        This number is different from your account mobile. Verify it with OTP.
-                      </p>
-                    ) : null}
-                    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-3">
-                      <input
-                        ref={mobileInputRef}
-                        type="tel"
-                        name="mobileNumber"
-                        value={deliveryInfo.mobileNumber}
-                        onChange={handleInputChange}
-                        className="min-w-0 w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                        placeholder="Enter 10-digit mobile number"
-                        maxLength={10}
-                        inputMode="numeric"
-                        autoComplete="tel"
-                        required
-                        disabled={showOtpPanel && !isCurrentMobileVerified}
-                      />
-                      {!isCurrentMobileVerified &&
-                        !(showSavedAddressUi && addressesLoading) && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                        <p className="text-sm font-semibold text-gray-800">Security check</p>
+                        <p className="text-xs text-gray-600">
+                          Complete the captcha, then tap Send OTP.
+                        </p>
+                        <div
+                          id={MSG91_CAPTCHA_RENDER_ID}
+                          className="min-h-[78px] flex justify-center items-center overflow-x-auto"
+                        />
+                        {captchaInitError ? (
+                          <p className="text-xs text-red-600">{captchaInitError}</p>
+                        ) : null}
+                        {!captchaInitError && captchaReady ? (
+                          <p
+                            className={`text-xs font-medium ${
+                              captchaSolved ? 'text-green-700' : 'text-amber-800'
+                            }`}
+                          >
+                            {captchaSolved
+                              ? 'Captcha completed ✓ — you can send OTP now.'
+                              : 'Waiting for captcha…'}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      {!showOtpPanel ? (
                         <button
                           type="button"
                           onClick={handleSendOtp}
@@ -990,90 +1058,27 @@ const CheckoutConfirmation = ({
                             !captchaReady ||
                             !captchaSolved
                           }
-                          className="order-last sm:order-none w-full sm:w-auto min-h-[48px] px-3 sm:px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold whitespace-nowrap active:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-500"
+                          className="w-full min-h-[48px] px-4 rounded-lg bg-blue-600 text-white text-sm font-semibold active:bg-blue-800 disabled:bg-gray-300 disabled:text-gray-500"
                           title={
                             captchaSolved
                               ? 'Send OTP'
-                              : 'Complete captcha first, then tap Verify Mobile'
+                              : 'Complete captcha first, then tap Send OTP'
                           }
                         >
-                          {sendingOtp ? 'Sending…' : 'Verify Mobile'}
+                          {sendingOtp ? 'Sending…' : 'Send OTP'}
                         </button>
-                      )}
-                      {!isCurrentMobileVerified &&
-                        !(showSavedAddressUi && addressesLoading) && (
-                        <div className="sm:col-span-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-                          <p className="text-sm font-semibold text-gray-800">Security check</p>
-                          <p className="text-xs text-gray-600">
-                            Complete the captcha, then tap Verify Mobile.
-                          </p>
-                          <div
-                            id={MSG91_CAPTCHA_RENDER_ID}
-                            className="min-h-[78px] flex justify-center items-center overflow-x-auto"
-                          />
-                          {captchaInitError && (
-                            <p className="text-xs text-red-600">{captchaInitError}</p>
-                          )}
-                          {!captchaInitError && captchaReady && (
-                            <p
-                              className={`text-xs font-medium ${
-                                captchaSolved ? 'text-green-700' : 'text-amber-800'
-                              }`}
-                            >
-                              {captchaSolved
-                                ? 'Captcha completed ✓ — you can verify mobile now.'
-                                : 'Waiting for captcha…'}
-                            </p>
-                          )}
-                        </div>
-                      )}
+                      ) : null}
+
+                      {!isCurrentMobileVerified && otpError && !showOtpPanel ? (
+                        <p className="text-sm text-red-600">{otpError}</p>
+                      ) : null}
                     </div>
+                  ) : null}
 
-                    {isCurrentMobileVerified && (
-                      <div className="mt-2 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-                        <ShieldCheck className="w-4 h-4 flex-shrink-0" />
-                        <span className="font-medium">
-                          {authMatchVerified
-                            ? ACCOUNT_MOBILE_VERIFIED_LABEL
-                            : 'Mobile Verified ✓'}
-                        </span>
-                        <span className="text-green-700">{maskMobile(verifiedMobile || currentMobile)}</span>
-                        <button
-                          type="button"
-                          onClick={handleChangeMobile}
-                          className="ml-auto text-xs font-semibold text-blue-700 underline min-h-[44px] px-1"
-                        >
-                          Change
-                        </button>
-                      </div>
-                    )}
-
-                    {showWelcomeBack && (
-                      <div
-                        className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50/80 p-4 space-y-1"
-                        role="status"
-                      >
-                        <p className="text-base font-bold text-gray-900">Welcome back! 👋</p>
-                        <p className="text-sm text-gray-700">
-                          This mobile number is already registered with FishMart.
-                        </p>
-                        <p className="text-sm text-gray-700">
-                          You&apos;re signed in to your existing account. Saved addresses and
-                          details will load automatically.
-                        </p>
-                      </div>
-                    )}
-
-                    {!isCurrentMobileVerified && otpError && !showOtpPanel && (
-                      <p className="mt-2 text-sm text-red-600">{otpError}</p>
-                    )}
-                  </div>
-
-                  {/* Custom OTP panel — not MSG91 default popup */}
-                  {showOtpPanel && !isCurrentMobileVerified && (
+                  {showMobileVerificationUi && showOtpPanel && !isCurrentMobileVerified ? (
                     <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3">
                       <div>
-                        <h4 className="text-base font-bold text-gray-900">Verify Mobile Number</h4>
+                        <h4 className="text-base font-bold text-gray-900">Enter OTP</h4>
                         <p className="text-sm text-gray-600">
                           Enter the 4-digit OTP sent to {maskMobile(deliveryInfo.mobileNumber)}
                         </p>
@@ -1097,10 +1102,10 @@ const CheckoutConfirmation = ({
                         aria-label="4-digit OTP"
                       />
 
-                      {otpMessage && (
+                      {otpMessage ? (
                         <p className="text-sm text-green-700">{otpMessage}</p>
-                      )}
-                      {otpError && <p className="text-sm text-red-600">{otpError}</p>}
+                      ) : null}
+                      {otpError ? <p className="text-sm text-red-600">{otpError}</p> : null}
 
                       <button
                         type="button"
@@ -1133,31 +1138,151 @@ const CheckoutConfirmation = ({
                         </button>
                       </div>
                     </div>
-                  )}
+                  ) : null}
 
-                  <DeliveryLocationPicker
-                    key={selectedAddressId || 'manual-delivery-location'}
-                    initialLocation={locationPickerInitial}
-                    onChange={(location) => {
-                      setDeliveryInfo((prev) => ({ ...prev, location }));
-                    }}
-                  />
+                  {isCurrentMobileVerified ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                      <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                      <span className="font-medium">
+                        {authMatchVerified
+                          ? ACCOUNT_MOBILE_VERIFIED_LABEL
+                          : 'Mobile verified ✓'}
+                      </span>
+                      <span className="text-green-700">
+                        {maskMobile(verifiedMobile || currentMobile)}
+                      </span>
+                      {!authMatchVerified ? (
+                        <button
+                          type="button"
+                          onClick={handleChangeMobile}
+                          className="ml-auto text-xs font-semibold text-blue-700 underline min-h-[44px] px-1"
+                        >
+                          Change
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      <MapPin className="w-4 h-4 inline mr-1" />
-                      Complete Address *
-                    </label>
-                    <textarea
-                      name="address"
-                      value={deliveryInfo.address}
-                      onChange={handleInputChange}
-                      rows="3"
-                      className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                      placeholder="House/Flat No., Building, Street, City, Pincode"
-                      required
-                    />
-                  </div>
+                  {showWelcomeBack ? (
+                    <div
+                      className="rounded-xl border border-cyan-200 bg-cyan-50/80 p-4 space-y-1"
+                      role="status"
+                    >
+                      <p className="text-base font-bold text-gray-900">
+                        Welcome back{welcomeBackFirstName ? `, ${welcomeBackFirstName}!` : '!'} 👋
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        This mobile number is already registered with FishMart.
+                      </p>
+                      <p className="text-sm text-gray-700">
+                        You&apos;re signed in to your existing account. Saved addresses and
+                        details will load automatically.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {showCustomerNameInput && showSavedAddressUi ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <User className="w-4 h-4 inline mr-1" />
+                        Customer Name *
+                      </label>
+                      <input
+                        type="text"
+                        name="customerName"
+                        value={deliveryInfo.customerName}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        placeholder="Enter your full name"
+                        required
+                      />
+                    </div>
+                  ) : null}
+
+                  {showSavedAddressUi && !showMobileVerificationUi ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <Phone className="w-4 h-4 inline mr-1" />
+                        {deliveryMobileDiffers ? 'Delivery mobile *' : 'Mobile Number *'}
+                      </label>
+                      {deliveryMobileDiffers ? (
+                        <p className="mb-2 text-xs text-gray-600">
+                          This number is different from your account mobile. Verify it with OTP.
+                        </p>
+                      ) : null}
+                      <input
+                        ref={mobileInputRef}
+                        type="tel"
+                        name="mobileNumber"
+                        value={deliveryInfo.mobileNumber}
+                        onChange={handleInputChange}
+                        className="min-w-0 w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        placeholder="Enter 10-digit mobile number"
+                        maxLength={10}
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        required
+                      />
+                    </div>
+                  ) : null}
+
+                  {showCustomerNameInput && !showSavedAddressUi ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <User className="w-4 h-4 inline mr-1" />
+                        Customer Name *
+                      </label>
+                      <input
+                        type="text"
+                        name="customerName"
+                        value={deliveryInfo.customerName}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                        placeholder="Enter your full name"
+                        required
+                      />
+                    </div>
+                  ) : null}
+
+                  {showExistingCustomerName ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <User className="w-4 h-4 inline mr-1" />
+                        Customer Name
+                      </label>
+                      <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-base font-semibold text-gray-900">
+                        {deliveryInfo.customerName}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {showManualDeliveryLocation ? (
+                    <>
+                      <DeliveryLocationPicker
+                        key={selectedAddressId || 'manual-delivery-location'}
+                        initialLocation={locationPickerInitial}
+                        onChange={(location) => {
+                          setDeliveryInfo((prev) => ({ ...prev, location }));
+                        }}
+                      />
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <MapPin className="w-4 h-4 inline mr-1" />
+                          Complete Address *
+                        </label>
+                        <textarea
+                          name="address"
+                          value={deliveryInfo.address}
+                          onChange={handleInputChange}
+                          rows="3"
+                          className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                          placeholder="House/Flat No., Building, Street, City, Pincode"
+                          required
+                        />
+                      </div>
+                    </>
+                  ) : null}
 
                   <div className="flex flex-col-reverse sm:flex-row gap-2 sm:space-x-3 sm:gap-0 pt-4 sticky bottom-0 bg-white pb-1">
                     <button

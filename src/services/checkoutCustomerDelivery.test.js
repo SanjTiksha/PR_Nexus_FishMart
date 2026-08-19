@@ -219,7 +219,7 @@ describe('checkout account detection wiring', () => {
     assert.match(checkoutAuthSource, /intent: 'checkout'/);
     assert.equal(checkoutSource.includes('exchangeVerifiedTokenForSession'), false);
     assert.equal(checkoutSource.includes('exchangeVerifiedTokenForGuestConversion'), false);
-    assert.match(checkoutSource, /Welcome back!/);
+    assert.match(checkoutSource, /Welcome back/);
     assert.equal(checkoutSource.includes('Create Account'), false);
   });
 
@@ -229,6 +229,29 @@ describe('checkout account detection wiring', () => {
     assert.match(checkoutSource, /handleChangeMobile/);
     assert.match(checkoutSource, /handleResendOtp/);
     assert.match(checkoutSource, /syncMobileVerification/);
+  });
+
+  it('allows existing checkout customers without profile name to enter customer name', () => {
+    assert.match(
+      checkoutSource,
+      /checkoutAccountBranch === 'existing' && !deliveryInfo\.customerName\.trim\(\)/,
+    );
+    assert.match(checkoutSource, /showExistingCustomerName/);
+  });
+
+  it('orders mobile verification as mobile, captcha, then Send OTP', () => {
+    const mobileIdx = checkoutSource.indexOf('Mobile Number *');
+    const captchaIdx = checkoutSource.indexOf('Security check');
+    const sendOtpIdx = checkoutSource.indexOf("sendingOtp ? 'Sending…' : 'Send OTP'");
+    const verifyMobileIdx = checkoutSource.indexOf('Verify Mobile');
+    assert.ok(mobileIdx > 0);
+    assert.ok(captchaIdx > mobileIdx);
+    assert.ok(sendOtpIdx > captchaIdx);
+    assert.equal(verifyMobileIdx, -1);
+    assert.match(checkoutSource, /!captchaSolved/);
+    assert.match(checkoutSource, /showCustomerNameInput && !showSavedAddressUi/);
+    assert.match(checkoutSource, /showExistingCustomerName/);
+    assert.match(checkoutSource, /getCustomerProfile/);
   });
 
   it('retains verified token for guest conversion and reuses saved-address infrastructure', () => {
