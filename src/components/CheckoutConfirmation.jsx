@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   X,
   ShoppingBag,
@@ -33,8 +33,11 @@ import {
   SAVED_ADDRESSES_UNAVAILABLE_MESSAGE,
   canSkipCheckoutOtpForAuthMobile,
   getAccountMobile10FromUser,
+  isConfirmedCheckoutLocation,
   isDeliveryReadyForPaymentGate,
   resolveDefaultSavedAddress,
+  resolveSelectedSavedAddressLocation,
+  shouldBlockUnconfirmedPickerOverwrite,
   shouldRunCheckoutAccountDetection,
   toCheckoutAddressCard,
   toCheckoutDeliverySnapshot,
@@ -113,6 +116,8 @@ const CheckoutConfirmation = ({
   const busyRef = useRef(false);
   const savedAddressesLoadedForUidRef = useRef('');
   const verifiedTokenRef = useRef('');
+  const selectedAddressIdRef = useRef('');
+  const savedAddressesRef = useRef([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -134,6 +139,7 @@ const CheckoutConfirmation = ({
       setDeliverySlotError('');
       setCheckoutUser(null);
       setSavedAddresses([]);
+      selectedAddressIdRef.current = '';
       setSelectedAddressId('');
       setShowAddressPicker(false);
       setAddressesLoading(false);
@@ -289,17 +295,52 @@ const CheckoutConfirmation = ({
       location: snapshot.location,
     }));
     setLocationPickerInitial(snapshot.location);
-    setSelectedAddressId(address.addressId || '');
+    const addressId = address.addressId || '';
+    selectedAddressIdRef.current = addressId;
+    setSelectedAddressId(addressId);
     setShowAddressPicker(false);
     syncMobileVerification(snapshot.mobileNumber, user);
     return true;
   };
 
+  const clearSelectedSavedAddress = () => {
+    selectedAddressIdRef.current = '';
+    setSelectedAddressId('');
+  };
+
+  const handleDeliveryLocationChange = (location) => {
+    const addressId = selectedAddressIdRef.current;
+    if (addressId) {
+      const address = savedAddressesRef.current.find((item) => item.addressId === addressId);
+      if (shouldBlockUnconfirmedPickerOverwrite(addressId, address, location)) {
+        return;
+      }
+    }
+    setDeliveryInfo((prev) => ({ ...prev, location }));
+  };
+
+  useEffect(() => {
+    selectedAddressIdRef.current = selectedAddressId;
+  }, [selectedAddressId]);
+
+  useEffect(() => {
+    savedAddressesRef.current = savedAddresses;
+  }, [savedAddresses]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !showDeliveryForm) return undefined;
+    if (!getAccountMobile10FromUser(checkoutUser)) return undefined;
+    const uid = checkoutUser.uid;
+    if (savedAddressesLoadedForUidRef.current === uid) return undefined;
+    setAddressesLoading(true);
+    return undefined;
+  }, [isOpen, showDeliveryForm, checkoutUser]);
+
   useEffect(() => {
     if (!isOpen || !showDeliveryForm) return undefined;
     if (!getAccountMobile10FromUser(checkoutUser)) {
       setSavedAddresses([]);
-      setSelectedAddressId('');
+      clearSelectedSavedAddress();
       setShowAddressPicker(false);
       setAddressesLoading(false);
       setAddressesError('');
@@ -586,7 +627,11 @@ const CheckoutConfirmation = ({
       return;
     }
 
-    if (!deliveryInfo.location?.confirmed || !deliveryInfo.location?.lat || !deliveryInfo.location?.lng) {
+    const submitLocation =
+      resolveSelectedSavedAddressLocation(selectedAddressId, savedAddresses) ||
+      deliveryInfo.location;
+
+    if (!isConfirmedCheckoutLocation(submitLocation)) {
       alert('Please set and confirm your delivery location on the map.');
       return;
     }
@@ -601,6 +646,7 @@ const CheckoutConfirmation = ({
     const payload = {
       ...deliveryInfo,
       mobileNumber: mobile,
+      location: submitLocation,
       mobileVerified: true,
       mobileVerifiedAt: new Date().toISOString(),
       deliveryDate: locked.deliveryDate,
@@ -904,7 +950,7 @@ const CheckoutConfirmation = ({
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedAddressId('');
+                              clearSelectedSavedAddress();
                               setShowAddressPicker(false);
                             }}
                             className="min-h-[48px] rounded-2xl border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-900"
@@ -951,7 +997,7 @@ const CheckoutConfirmation = ({
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedAddressId('');
+                            clearSelectedSavedAddress();
                             setShowAddressPicker(false);
                           }}
                           className="flex w-full min-h-[48px] items-center justify-center rounded-2xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-900"
@@ -981,7 +1027,7 @@ const CheckoutConfirmation = ({
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedAddressId('');
+                          clearSelectedSavedAddress();
                           setShowAddressPicker(false);
                         }}
                         className="flex w-full min-h-[48px] items-center justify-center rounded-2xl bg-[#087EA4] px-4 text-sm font-bold text-white"
@@ -1261,9 +1307,7 @@ const CheckoutConfirmation = ({
                       <DeliveryLocationPicker
                         key={selectedAddressId || 'manual-delivery-location'}
                         initialLocation={locationPickerInitial}
-                        onChange={(location) => {
-                          setDeliveryInfo((prev) => ({ ...prev, location }));
-                        }}
+                        onChange={handleDeliveryLocationChange}
                       />
 
                       <div>

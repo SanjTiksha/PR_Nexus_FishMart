@@ -7,8 +7,11 @@ import {
   ACCOUNT_MOBILE_VERIFIED_LABEL,
   canSkipCheckoutOtpForAuthMobile,
   getAccountMobile10FromUser,
+  isConfirmedCheckoutLocation,
   isDeliveryReadyForPaymentGate,
   resolveDefaultSavedAddress,
+  resolveSelectedSavedAddressLocation,
+  shouldBlockUnconfirmedPickerOverwrite,
   shouldRunCheckoutAccountDetection,
   toCheckoutAddressCard,
   toCheckoutDeliverySnapshot,
@@ -126,6 +129,89 @@ describe('saved address snapshot', () => {
     assert.equal(card.locationConfirmed, true);
     assert.equal(card.mobileMasked.includes('91'), true);
     assert.equal(card.mobileMasked.includes(OTHER_MOBILE), false);
+  });
+
+  it('uses strict location validity for saved-address locationConfirmed badge', () => {
+    assert.equal(
+      toCheckoutAddressCard({
+        ...savedHome,
+        location: { confirmed: true },
+      }).locationConfirmed,
+      false,
+    );
+    assert.equal(
+      toCheckoutAddressCard({
+        ...savedHome,
+        location: { confirmed: true, lat: 'bad', lng: 73.85 },
+      }).locationConfirmed,
+      false,
+    );
+    assert.equal(
+      toCheckoutAddressCard({
+        ...savedHome,
+        location: confirmedLocation,
+      }).locationConfirmed,
+      true,
+    );
+  });
+});
+
+describe('saved address location sync', () => {
+  const stalePickerLocation = {
+    lat: 18.51,
+    lng: 73.84,
+    confirmed: false,
+    source: 'map',
+  };
+
+  it('blocks stale unconfirmed picker updates when a valid saved address is selected', () => {
+    assert.equal(
+      shouldBlockUnconfirmedPickerOverwrite('addr_home', savedHome, stalePickerLocation),
+      true,
+    );
+  });
+
+  it('allows confirmed picker updates and manual map mode without a selected saved address', () => {
+    assert.equal(
+      shouldBlockUnconfirmedPickerOverwrite('addr_home', savedHome, confirmedLocation),
+      false,
+    );
+    assert.equal(shouldBlockUnconfirmedPickerOverwrite('', savedHome, stalePickerLocation), false);
+    assert.equal(shouldBlockUnconfirmedPickerOverwrite('addr_home', null, stalePickerLocation), false);
+  });
+
+  it('derives a validated selected saved-address location for defensive submit', () => {
+    const resolved = resolveSelectedSavedAddressLocation('addr_home', [savedHome, savedOffice]);
+    assert.equal(resolved.confirmed, true);
+    assert.equal(resolved.lat, 18.52);
+    assert.equal(resolved.lng, 73.85);
+    assert.equal(resolveSelectedSavedAddressLocation('missing', [savedHome]), null);
+    assert.equal(
+      resolveSelectedSavedAddressLocation('addr_home', [
+        { ...savedHome, location: { confirmed: true } },
+      ]),
+      null,
+    );
+  });
+
+  it('keeps checkout location validation strict for invalid or unconfirmed locations', () => {
+    assert.equal(isConfirmedCheckoutLocation(confirmedLocation), true);
+    assert.equal(isConfirmedCheckoutLocation({ confirmed: true }), false);
+    assert.equal(
+      isDeliveryReadyForPaymentGate(CUSTOMER_USER, {
+        ...readyDelivery,
+        location: stalePickerLocation,
+      }),
+      false,
+    );
+  });
+
+  it('wires saved-address location guards into checkout confirmation', () => {
+    assert.match(checkoutSource, /handleDeliveryLocationChange/);
+    assert.match(checkoutSource, /shouldBlockUnconfirmedPickerOverwrite/);
+    assert.match(checkoutSource, /resolveSelectedSavedAddressLocation/);
+    assert.match(checkoutSource, /useLayoutEffect/);
+    assert.match(checkoutSource, /clearSelectedSavedAddress/);
   });
 });
 

@@ -98,9 +98,27 @@ export const toCheckoutAddressCard = (address, selectedAddressId = '') => {
     fullName: address.fullName || '',
     mobileMasked: formatMaskedCustomerMobile(address.mobile10),
     address: shortenAddress(address.address),
-    locationConfirmed: address.location?.confirmed === true,
+    locationConfirmed: isConfirmedCheckoutLocation(address.location),
     selected: Boolean(selectedAddressId) && address.addressId === selectedAddressId,
   };
+};
+
+export const resolveSelectedSavedAddressLocation = (selectedAddressId, addresses) => {
+  if (!selectedAddressId || !Array.isArray(addresses)) return null;
+  const address = addresses.find((item) => item?.addressId === selectedAddressId);
+  if (!address) return null;
+  return toCheckoutLocationSnapshot(address.location);
+};
+
+/** Ignore stale picker geolocation when a saved address with valid location is selected. */
+export const shouldBlockUnconfirmedPickerOverwrite = (
+  selectedAddressId,
+  savedAddress,
+  incomingLocation,
+) => {
+  if (!selectedAddressId || !savedAddress) return false;
+  if (isConfirmedCheckoutLocation(incomingLocation)) return false;
+  return isConfirmedCheckoutLocation(savedAddress.location);
 };
 
 export const isConfirmedCheckoutLocation = (location) => {
