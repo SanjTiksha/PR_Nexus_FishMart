@@ -20,12 +20,32 @@ const {
 } = require('./claimGuestCheckoutOrder');
 
 const mintCustomToken = async (uid) => getAuth().createCustomToken(uid);
+const defaultGetUser = (uid) => getAuth().getUser(uid);
+
+const isAuthUserNotFound = (error) => {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  return code === 'auth/user-not-found';
+};
+
+const mintVerifiedCustomToken = async (uid, deps) => {
+  const createCustomToken = deps.createCustomToken ?? mintCustomToken;
+  const customToken = await createCustomToken(uid);
+  if (typeof customToken !== 'string' || !customToken.trim()) {
+    return { ok: false, code: 'token' };
+  }
+  return {
+    ok: true,
+    customToken: customToken.trim(),
+    uid,
+  };
+};
 
 /**
  * Phase 1A.3: MSG91 verified token → verifyAccessToken → message → Custom Token.
  * Does not persist sessions, return the mobile, or change Firestore rules.
  */
 const verifyCustomerMsg91Token = async (token, deps = {}) => {
+  const intent = deps.intent === 'checkout' ? 'checkout' : 'session';
   const authkey = deps.authkey ?? getMsg91AuthKey(deps.env);
   if (!authkey) {
     return { ok: false, code: 'unavailable' };
@@ -50,17 +70,41 @@ const verifyCustomerMsg91Token = async (token, deps = {}) => {
     return { ok: false, code: 'rejected' };
   }
 
-  try {
-    const createCustomToken = deps.createCustomToken ?? mintCustomToken;
-    const customToken = await createCustomToken(identity.uid);
-    if (typeof customToken !== 'string' || !customToken.trim()) {
+  if (intent === 'checkout') {
+    const getUser = deps.getUser ?? defaultGetUser;
+    try {
+      await getUser(identity.uid);
+    } catch (error) {
+      if (isAuthUserNotFound(error)) {
+        return {
+          ok: true,
+          accountExists: false,
+          uid: identity.uid,
+        };
+      }
+      const logError = deps.logError ?? console.error;
+      logError('customerMsg91Session getUser failed');
       return { ok: false, code: 'token' };
     }
-    return {
-      ok: true,
-      customToken: customToken.trim(),
-      uid: identity.uid,
-    };
+
+    try {
+      const minted = await mintVerifiedCustomToken(identity.uid, deps);
+      if (!minted.ok) {
+        return minted;
+      }
+      return {
+        ok: true,
+        accountExists: true,
+        customToken: minted.customToken,
+        uid: identity.uid,
+      };
+    } catch {
+      return { ok: false, code: 'token' };
+    }
+  }
+
+  try {
+    return await mintVerifiedCustomToken(identity.uid, deps);
   } catch {
     return { ok: false, code: 'token' };
   }
@@ -136,8 +180,23 @@ const handleCustomerMsg91Session = async (req, res, deps = {}) => {
     return;
   }
 
-  const result = await verifyCustomerMsg91Token(parsed.token, deps);
+  const result = await verifyCustomerMsg91Token(parsed.token, {
+    ...deps,
+    intent: parsed.intent,
+  });
   if (result.ok) {
+    if (parsed.intent === 'checkout') {
+      if (result.accountExists === true) {
+        sendJson(res, 200, {
+          accountExists: true,
+          customToken: result.customToken,
+        });
+        return;
+      }
+      sendJson(res, 200, { accountExists: false });
+      return;
+    }
+
     const linked = await linkGuestOrderIfRequested(req.body, result.uid, deps);
     const body = { customToken: result.customToken };
     if (linked.include) {

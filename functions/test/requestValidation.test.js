@@ -8,7 +8,7 @@ const { MAX_TOKEN_LENGTH } = require('../src/config');
 describe('validateSessionRequest', () => {
   it('accepts a non-empty token string', () => {
     const result = validateSessionRequest({ token: '  abc.def  ' });
-    assert.deepEqual(result, { ok: true, token: 'abc.def' });
+    assert.deepEqual(result, { ok: true, token: 'abc.def', intent: 'session' });
   });
 
   it('rejects missing body', () => {
@@ -47,6 +47,31 @@ describe('validateSessionRequest', () => {
       mobile: '9876543210',
       mobileVerified: true,
     });
-    assert.deepEqual(result, { ok: true, token: 'verified-token' });
+    assert.deepEqual(result, { ok: true, token: 'verified-token', intent: 'session' });
+  });
+
+  it('accepts checkout intent', () => {
+    const result = validateSessionRequest({
+      token: 'verified-token',
+      intent: 'checkout',
+    });
+    assert.deepEqual(result, { ok: true, token: 'verified-token', intent: 'checkout' });
+  });
+
+  it('accepts session intent explicitly', () => {
+    const result = validateSessionRequest({
+      token: 'verified-token',
+      intent: 'session',
+    });
+    assert.deepEqual(result, { ok: true, token: 'verified-token', intent: 'session' });
+  });
+
+  it('rejects invalid intent values', () => {
+    assert.equal(
+      validateSessionRequest({ token: 'verified-token', intent: 'something-else' }).ok,
+      false,
+    );
+    assert.equal(validateSessionRequest({ token: 'verified-token', intent: '' }).ok, false);
+    assert.equal(validateSessionRequest({ token: 'verified-token', intent: 123 }).ok, false);
   });
 });

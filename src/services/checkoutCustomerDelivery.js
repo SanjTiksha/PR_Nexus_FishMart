@@ -29,6 +29,10 @@ export const getAccountMobile10FromUser = (user) => {
   return identity?.mobile10 || '';
 };
 
+/** Logged-out checkout only — skip when a FishMart customer is already signed in. */
+export const shouldRunCheckoutAccountDetection = (user) =>
+  !getAccountMobile10FromUser(user);
+
 export const canSkipCheckoutOtpForAuthMobile = (user, deliveryMobile) => {
   if (!isCustomerUser(user)) return false;
   const accountMobile = getAccountMobile10FromUser(user);

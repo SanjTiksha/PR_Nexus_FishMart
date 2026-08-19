@@ -2,6 +2,8 @@
 
 const { MAX_TOKEN_LENGTH } = require('./config');
 
+const VALID_INTENTS = new Set(['checkout', 'session']);
+
 /**
  * Client may send extra fields. mobile / mobileVerified / verifiedMobile are
  * never treated as proof of identity. Only a non-empty token string is accepted.
@@ -21,7 +23,19 @@ const validateSessionRequest = (body) => {
     return { ok: false };
   }
 
-  return { ok: true, token: trimmed };
+  let intent = 'session';
+  if (Object.prototype.hasOwnProperty.call(body, 'intent')) {
+    if (typeof body.intent !== 'string') {
+      return { ok: false };
+    }
+    const trimmedIntent = body.intent.trim();
+    if (!VALID_INTENTS.has(trimmedIntent)) {
+      return { ok: false };
+    }
+    intent = trimmedIntent;
+  }
+
+  return { ok: true, token: trimmed, intent };
 };
 
 module.exports = {

@@ -85,3 +85,10 @@ export const exchangeVerifiedTokenForSession = async (token) => {
 
   return { customToken: customToken.trim() };
 };
+
+export {
+  CHECKOUT_VERIFY_FAILED_MESSAGE,
+  CHECKOUT_SESSION_UNAVAILABLE_MESSAGE,
+  CheckoutSessionExchangeError,
+  exchangeVerifiedTokenForCheckoutSession,
+} from './customerAuthCheckout.js';

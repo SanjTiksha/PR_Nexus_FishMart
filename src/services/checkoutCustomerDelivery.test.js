@@ -9,6 +9,7 @@ import {
   getAccountMobile10FromUser,
   isDeliveryReadyForPaymentGate,
   resolveDefaultSavedAddress,
+  shouldRunCheckoutAccountDetection,
   toCheckoutAddressCard,
   toCheckoutDeliverySnapshot,
 } from './checkoutCustomerDelivery.js';
@@ -48,6 +49,10 @@ const readyDelivery = {
 
 const source = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), 'checkoutCustomerDelivery.js'),
+  'utf8',
+);
+const checkoutAuthSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'customerAuthCheckout.js'),
   'utf8',
 );
 const checkoutSource = readFileSync(
@@ -197,5 +202,42 @@ describe('payment gates', () => {
     assert.equal(checkoutSource.includes('createCustomerAddress'), false);
     assert.equal(checkoutSource.includes('updateCustomerAddress'), false);
     assert.equal(checkoutSource.includes('onSnapshot'), false);
+  });
+});
+
+describe('checkout account detection wiring', () => {
+  it('runs account detection only for logged-out checkout', () => {
+    assert.equal(shouldRunCheckoutAccountDetection(null), true);
+    assert.equal(shouldRunCheckoutAccountDetection(CUSTOMER_USER), false);
+    assert.equal(shouldRunCheckoutAccountDetection(ADMIN_USER), true);
+  });
+
+  it('uses checkout session exchange and sign-in only in logged-out OTP verification', () => {
+    assert.match(checkoutSource, /exchangeVerifiedTokenForCheckoutSession/);
+    assert.match(checkoutSource, /shouldRunCheckoutAccountDetection/);
+    assert.match(checkoutSource, /signInWithCustomToken/);
+    assert.match(checkoutAuthSource, /intent: 'checkout'/);
+    assert.equal(checkoutSource.includes('exchangeVerifiedTokenForSession'), false);
+    assert.equal(checkoutSource.includes('exchangeVerifiedTokenForGuestConversion'), false);
+    assert.match(checkoutSource, /Welcome back!/);
+    assert.equal(checkoutSource.includes('Create Account'), false);
+  });
+
+  it('guards duplicate OTP verification and resets account branch on mobile change', () => {
+    assert.match(checkoutSource, /if \(busyRef\.current \|\| verifyingOtp\) return;/);
+    assert.match(checkoutSource, /resetCheckoutAccountDetection/);
+    assert.match(checkoutSource, /handleChangeMobile/);
+    assert.match(checkoutSource, /handleResendOtp/);
+    assert.match(checkoutSource, /syncMobileVerification/);
+  });
+
+  it('retains verified token for guest conversion and reuses saved-address infrastructure', () => {
+    assert.match(checkoutSource, /verifiedTokenRef\.current = verifiedToken/);
+    assert.match(checkoutSource, /setCheckoutAccountBranch\('guest'\)/);
+    assert.match(checkoutSource, /getCustomerAddresses/);
+    assert.match(checkoutSource, /resolveDefaultSavedAddress/);
+    assert.match(checkoutSource, /applySavedAddressSnapshot/);
+    assert.equal(appSource.includes('exchangeVerifiedTokenForGuestConversion'), true);
+    assert.match(appSource, /shouldOfferGuestConversion/);
   });
 });

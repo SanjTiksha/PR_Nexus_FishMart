@@ -415,4 +415,193 @@ describe('handleCustomerMsg91Session', () => {
     assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'uid'), false);
     assert.equal(String(res.body).includes('phone_919999999999'), false);
   });
+
+  it('returns accountExists true with customToken for existing customer checkout intent', async () => {
+    let getUserCalls = 0;
+    let createTokenCalls = 0;
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token', intent: 'checkout' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      getUser: async (uid) => {
+        getUserCalls += 1;
+        assert.equal(uid, 'phone_919999999999');
+        return { uid };
+      },
+      createCustomToken: async (uid) => {
+        createTokenCalls += 1;
+        assert.equal(uid, 'phone_919999999999');
+        return MOCK_CUSTOM_TOKEN;
+      },
+    });
+    assert.equal(res.statusCode, 200);
+    const parsedBody = JSON.parse(res.body);
+    assert.equal(parsedBody.accountExists, true);
+    assert.equal(parsedBody.customToken, MOCK_CUSTOM_TOKEN);
+    assert.equal(Object.prototype.hasOwnProperty.call(parsedBody, 'orderLinked'), false);
+    assert.equal(getUserCalls, 1);
+    assert.equal(createTokenCalls, 1);
+  });
+
+  it('returns accountExists false without customToken for new customer checkout intent', async () => {
+    let getUserCalls = 0;
+    let createTokenCalls = 0;
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token', intent: 'checkout' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      getUser: async (uid) => {
+        getUserCalls += 1;
+        assert.equal(uid, 'phone_919999999999');
+        const error = new Error('user not found');
+        error.code = 'auth/user-not-found';
+        throw error;
+      },
+      createCustomToken: async () => {
+        createTokenCalls += 1;
+        return MOCK_CUSTOM_TOKEN;
+      },
+    });
+    assert.equal(res.statusCode, 200);
+    const parsedBody = JSON.parse(res.body);
+    assert.deepEqual(parsedBody, { accountExists: false });
+    assert.equal(getUserCalls, 1);
+    assert.equal(createTokenCalls, 0);
+  });
+
+  it('returns server error for unexpected getUser failure on checkout intent', async () => {
+    let createTokenCalls = 0;
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token', intent: 'checkout' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      getUser: async () => {
+        const error = new Error('admin-unavailable');
+        error.code = 'auth/internal-error';
+        throw error;
+      },
+      createCustomToken: async () => {
+        createTokenCalls += 1;
+        return MOCK_CUSTOM_TOKEN;
+      },
+      logError: () => {},
+    });
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(JSON.parse(res.body), { error: 'Verification unavailable' });
+    assert.equal(createTokenCalls, 0);
+    assert.equal(String(res.body).includes('admin-unavailable'), false);
+  });
+
+  it('rejects invalid intent with 400', async () => {
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token', intent: 'something-else' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, successDeps);
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(JSON.parse(res.body), { error: 'Invalid request' });
+  });
+
+  it('returns 401 for checkout intent when MSG91 verification fails', async () => {
+    let getUserCalls = 0;
+    const req = mockReq({
+      method: 'POST',
+      origin: localOrigin,
+      contentType: 'application/json',
+      body: { token: 'widget-token', intent: 'checkout' },
+    });
+    const res = mockRes();
+    await handleCustomerMsg91Session(req, res, {
+      ...successDeps,
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success' },
+      }),
+      getUser: async () => {
+        getUserCalls += 1;
+        return { uid: 'phone_919999999999' };
+      },
+    });
+    assert.equal(res.statusCode, 401);
+    assert.deepEqual(JSON.parse(res.body), { error: 'Verification failed' });
+    assert.equal(getUserCalls, 0);
+  });
+});
+
+describe('verifyCustomerMsg91Token checkout intent', () => {
+  it('returns accountExists true and mints token when Auth user exists', async () => {
+    let createTokenCalls = 0;
+    const result = await verifyCustomerMsg91Token('widget-token', {
+      authkey: 'test-authkey',
+      intent: 'checkout',
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success', message: '919999999999' },
+      }),
+      getUser: async (uid) => {
+        assert.equal(uid, 'phone_919999999999');
+        return { uid };
+      },
+      createCustomToken: async (uid) => {
+        createTokenCalls += 1;
+        assert.equal(uid, 'phone_919999999999');
+        return MOCK_CUSTOM_TOKEN;
+      },
+    });
+    assert.deepEqual(result, {
+      ok: true,
+      accountExists: true,
+      customToken: MOCK_CUSTOM_TOKEN,
+      uid: 'phone_919999999999',
+    });
+    assert.equal(createTokenCalls, 1);
+  });
+
+  it('returns accountExists false without minting when Auth user is missing', async () => {
+    let createTokenCalls = 0;
+    const result = await verifyCustomerMsg91Token('widget-token', {
+      authkey: 'test-authkey',
+      intent: 'checkout',
+      verifyAccessToken: async () => ({
+        kind: 'http',
+        status: 200,
+        body: { type: 'success', message: '919999999999' },
+      }),
+      getUser: async () => {
+        const error = new Error('user not found');
+        error.code = 'auth/user-not-found';
+        throw error;
+      },
+      createCustomToken: async () => {
+        createTokenCalls += 1;
+        return MOCK_CUSTOM_TOKEN;
+      },
+    });
+    assert.deepEqual(result, {
+      ok: true,
+      accountExists: false,
+      uid: 'phone_919999999999',
+    });
+    assert.equal(createTokenCalls, 0);
+  });
 });

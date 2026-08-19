@@ -9,7 +9,7 @@ import {
   User,
   ShieldCheck,
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { auth } from '../firebaseConfig';
 import { getFishImageUrl, handleImageError } from '../utils/imageUtils';
 import { normalizeQuantity, calculateLineTotal } from '../utils/quantityUtils';
@@ -35,10 +35,17 @@ import {
   getAccountMobile10FromUser,
   isDeliveryReadyForPaymentGate,
   resolveDefaultSavedAddress,
+  shouldRunCheckoutAccountDetection,
   toCheckoutAddressCard,
   toCheckoutDeliverySnapshot,
 } from '../services/checkoutCustomerDelivery';
 import { captureCheckoutVerifiedToken } from '../services/guestCheckoutConversion';
+import {
+  CHECKOUT_SESSION_UNAVAILABLE_MESSAGE,
+  CHECKOUT_VERIFY_FAILED_MESSAGE,
+  CheckoutSessionExchangeError,
+  exchangeVerifiedTokenForCheckoutSession,
+} from '../services/customerAuthCheckout';
 import { getCustomerAddresses } from '../services/customerAddresses';
 import {
   groupAvailableOptionsByDay,
@@ -97,6 +104,7 @@ const CheckoutConfirmation = ({
   const [addressesLoading, setAddressesLoading] = useState(false);
   const [addressesError, setAddressesError] = useState('');
   const [locationPickerInitial, setLocationPickerInitial] = useState(null);
+  const [checkoutAccountBranch, setCheckoutAccountBranch] = useState(null);
 
   const otpInputRef = useRef(null);
   const mobileInputRef = useRef(null);
@@ -130,6 +138,7 @@ const CheckoutConfirmation = ({
       setAddressesLoading(false);
       setAddressesError('');
       setLocationPickerInitial(null);
+      setCheckoutAccountBranch(null);
       reqIdRef.current = '';
       busyRef.current = false;
       savedAddressesLoadedForUidRef.current = '';
@@ -234,6 +243,11 @@ const CheckoutConfirmation = ({
     return unsubscribe;
   }, [isOpen, showDeliveryForm]);
 
+  const resetCheckoutAccountDetection = () => {
+    setCheckoutAccountBranch(null);
+    verifiedTokenRef.current = '';
+  };
+
   const syncMobileVerification = (mobile, user) => {
     const normalized = normalizeIndianMobile(mobile);
     if (canSkipCheckoutOtpForAuthMobile(user, normalized)) {
@@ -246,6 +260,7 @@ const CheckoutConfirmation = ({
       setResendSeconds(0);
       reqIdRef.current = '';
       verifiedTokenRef.current = '';
+      setCheckoutAccountBranch(null);
       return;
     }
     if (mobileVerified && verifiedMobile && verifiedMobile === normalized) {
@@ -259,7 +274,7 @@ const CheckoutConfirmation = ({
     setOtpError('');
     setResendSeconds(0);
     reqIdRef.current = '';
-    verifiedTokenRef.current = '';
+    resetCheckoutAccountDetection();
   };
 
   const applySavedAddressSnapshot = (address, user) => {
@@ -426,9 +441,33 @@ const CheckoutConfirmation = ({
     try {
       await ensureMsg91OtpReady();
       const verifyData = await verifyMsg91Otp(otp, reqIdRef.current || undefined);
-      verifiedTokenRef.current = captureCheckoutVerifiedToken(verifyData);
+      const verifiedToken = captureCheckoutVerifiedToken(verifyData);
+      if (!verifiedToken) {
+        resetCheckoutAccountDetection();
+        setMobileVerified(false);
+        setVerifiedMobile('');
+        setOtpError(CHECKOUT_VERIFY_FAILED_MESSAGE);
+        return;
+      }
 
       const mobile = normalizeIndianMobile(deliveryInfo.mobileNumber);
+      const runAccountDetection = shouldRunCheckoutAccountDetection(checkoutUser);
+
+      if (runAccountDetection) {
+        const session = await exchangeVerifiedTokenForCheckoutSession(verifiedToken);
+        if (session.accountExists === true) {
+          await signInWithCustomToken(auth, session.customToken);
+          verifiedTokenRef.current = verifiedToken;
+          setCheckoutAccountBranch('existing');
+        } else {
+          verifiedTokenRef.current = verifiedToken;
+          setCheckoutAccountBranch('guest');
+        }
+      } else {
+        verifiedTokenRef.current = verifiedToken;
+        setCheckoutAccountBranch(null);
+      }
+
       setMobileVerified(true);
       setVerifiedMobile(mobile);
       setShowOtpPanel(false);
@@ -436,11 +475,19 @@ const CheckoutConfirmation = ({
       setOtpMessage('');
       setOtpError('');
       setResendSeconds(0);
-    } catch {
-      verifiedTokenRef.current = '';
+    } catch (error) {
+      resetCheckoutAccountDetection();
       setMobileVerified(false);
       setVerifiedMobile('');
-      setOtpError('Invalid or expired OTP. Please try again.');
+      if (error instanceof CheckoutSessionExchangeError) {
+        setOtpError(
+          error.kind === 'verification'
+            ? CHECKOUT_VERIFY_FAILED_MESSAGE
+            : CHECKOUT_SESSION_UNAVAILABLE_MESSAGE,
+        );
+      } else {
+        setOtpError('Invalid or expired OTP. Please try again.');
+      }
     } finally {
       setVerifyingOtp(false);
       busyRef.current = false;
@@ -452,6 +499,7 @@ const CheckoutConfirmation = ({
 
     setOtpError('');
     setOtpMessage('');
+    resetCheckoutAccountDetection();
     busyRef.current = true;
     setResendingOtp(true);
 
@@ -473,6 +521,9 @@ const CheckoutConfirmation = ({
 
   const handleChangeMobile = () => {
     setShowOtpPanel(false);
+    resetCheckoutAccountDetection();
+    setMobileVerified(false);
+    setVerifiedMobile('');
     setTimeout(() => mobileInputRef.current?.focus(), 50);
   };
 
@@ -548,6 +599,8 @@ const CheckoutConfirmation = ({
   const showSavedAddressUi = Boolean(accountMobile10);
   const deliveryMobileDiffers =
     Boolean(accountMobile10 && currentMobile && currentMobile !== accountMobile10);
+  const showWelcomeBack =
+    checkoutAccountBranch === 'existing' && isCurrentMobileVerified;
 
   return (
     <div
@@ -992,6 +1045,22 @@ const CheckoutConfirmation = ({
                         >
                           Change
                         </button>
+                      </div>
+                    )}
+
+                    {showWelcomeBack && (
+                      <div
+                        className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50/80 p-4 space-y-1"
+                        role="status"
+                      >
+                        <p className="text-base font-bold text-gray-900">Welcome back! 👋</p>
+                        <p className="text-sm text-gray-700">
+                          This mobile number is already registered with FishMart.
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          You&apos;re signed in to your existing account. Saved addresses and
+                          details will load automatically.
+                        </p>
                       </div>
                     )}
 
