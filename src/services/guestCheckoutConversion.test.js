@@ -43,10 +43,10 @@ describe('guest checkout conversion helpers', () => {
   it('lets a verified checkout token be captured without treating typed mobile as proof', () => {
     const token = captureCheckoutVerifiedToken({
       type: 'success',
-      message: 'checkout-widget-jwt',
+      'access-token': 'checkout-widget-access-token-jwt',
       mobile: '9999999999',
     });
-    assert.equal(token, 'checkout-widget-jwt');
+    assert.equal(token, 'checkout-widget-access-token-jwt');
     assert.equal(captureCheckoutVerifiedToken({ mobileVerified: true }), '');
   });
 
