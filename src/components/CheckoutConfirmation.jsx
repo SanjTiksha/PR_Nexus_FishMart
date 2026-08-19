@@ -22,6 +22,7 @@ import {
   MSG91_CAPTCHA_RENDER_ID,
   normalizeIndianMobile,
   onMsg91CaptchaChange,
+  refreshMsg91CaptchaVerified,
   retryMsg91Otp,
   sendMsg91Otp,
   toMsg91Identifier,
@@ -183,14 +184,17 @@ const CheckoutConfirmation = ({
 
   // Init MSG91 only when delivery form is shown AND checkout OTP is required.
   // H-Captcha often fails if the mount node is display:none during init.
+  const checkoutCaptchaActive =
+    isOpen &&
+    showDeliveryForm &&
+    !(getAccountMobile10FromUser(checkoutUser) && addressesLoading) &&
+    !canSkipCheckoutOtpForAuthMobile(
+      checkoutUser,
+      normalizeIndianMobile(deliveryInfo.mobileNumber),
+    );
+
   useEffect(() => {
-    if (!isOpen || !showDeliveryForm) return undefined;
-    if (getAccountMobile10FromUser(checkoutUser) && addressesLoading) {
-      return undefined;
-    }
-    if (canSkipCheckoutOtpForAuthMobile(checkoutUser, deliveryInfo.mobileNumber)) {
-      return undefined;
-    }
+    if (!checkoutCaptchaActive) return undefined;
 
     let cancelled = false;
     const unsub = onMsg91CaptchaChange((ok) => {
@@ -203,7 +207,7 @@ const CheckoutConfirmation = ({
         if (cancelled) return;
         setCaptchaReady(true);
         setCaptchaInitError('');
-        setCaptchaSolved(isMsg91CaptchaVerified());
+        setCaptchaSolved(refreshMsg91CaptchaVerified());
       } catch (err) {
         if (cancelled) return;
         setCaptchaReady(false);
@@ -213,9 +217,9 @@ const CheckoutConfirmation = ({
       }
     }, 80);
 
-    // Poll often — MSG91 may not flip isCaptchaVerified even when H-Captcha UI shows ✓
+    // Poll — sync DOM token into MSG91 before reading verified state
     const poll = window.setInterval(() => {
-      if (!cancelled) setCaptchaSolved(isMsg91CaptchaVerified());
+      if (!cancelled) setCaptchaSolved(refreshMsg91CaptchaVerified());
     }, 250);
 
     return () => {
@@ -224,7 +228,7 @@ const CheckoutConfirmation = ({
       clearInterval(poll);
       unsub();
     };
-  }, [isOpen, showDeliveryForm, checkoutUser, deliveryInfo.mobileNumber, addressesLoading]);
+  }, [checkoutCaptchaActive]);
 
   useEffect(() => {
     if (resendSeconds <= 0) return undefined;

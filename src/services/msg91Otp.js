@@ -191,6 +191,10 @@ const syncCaptchaTokenFromUi = (tokenHint = '') => {
   return verified;
 };
 
+/** Sync hCaptcha DOM token into MSG91, then return MSG91 verified state. */
+export const refreshMsg91CaptchaVerified = (tokenHint = '') =>
+  syncCaptchaTokenFromUi(tokenHint);
+
 /**
  * Listen for H-Captcha verified events and sync token into MSG91 component.
  * Never replaces window.isCaptchaVerified / window.sendOtp.
